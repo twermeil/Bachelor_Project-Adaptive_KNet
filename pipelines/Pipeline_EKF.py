@@ -98,7 +98,7 @@ class WeightedHuberIQRScalingLoss(nn.Module):
     
 class Pipeline_EKF:
 
-    def __init__(self, Time, folderName, modelName):
+    def __init__(self, Time, folderName, modelName): #where to save best model for further loading
         super().__init__()
         self.Time = Time
         self.folderName = folderName + '/'
@@ -349,7 +349,7 @@ class Pipeline_EKF:
                     self.MSE_cv_dB_opt = self.MSE_cv_dB_epoch[ti]
                     self.MSE_cv_idx_opt = ti
                     # Save the model weights to a file
-                    torch.save(self.model.state_dict(), path_results + 'knet_best-model.pt')
+                    torch.save(self.model.state_dict(), path_results + 'knet_best-model.pt') #save the best model (when cv loss is smallest)
 
             ########################
             ### Training Summary ###

@@ -46,7 +46,7 @@ else:
     print("Using CPU")
 
 ### dataset parameters ##################################################
-# determine noise distribution normal/exp (DEFAULT: "normal")
+# determine noise distribution normal/exp (DEFAULT: "normal (=Gaussian)")
 args.proc_noise_distri = "exponential"
 args.meas_noise_distri = "exponential"
 
@@ -66,9 +66,9 @@ else:
    raise ValueError("args.meas_noise_distri not recognized")
 m1_0 = m1_0.to(device)
 
-args.N_E = 1000
-args.N_CV = 100
-args.N_T = 200
+args.N_E = 1000 #training dataset size
+args.N_CV = 100 #cross validation
+args.N_T = 200 #testing dataset size
 # deterministic initial condition
 m2_0 = 0 * torch.eye(m)
 # sequence length
@@ -84,13 +84,16 @@ if args.wandb_switch:
    import wandb
    wandb.init(project="HKNet_Linear")
 args.knet_trainable = True
+
 # training parameters for KNet
 args.in_mult_KNet = 40
 args.out_mult_KNet = 40
 args.n_steps = 50000
+#already tuned parameters
 args.n_batch = 32 
 args.lr = 1e-3
 args.wd = 1e-3
+
 # training parameters for Hypernet
 args.hnet_arch = "GRU" # "deconv" or "GRU
 if args.hnet_arch == "GRU": # settings for GRU hnet
@@ -158,15 +161,15 @@ test_init_list = []
 
 for i in range(len(SoW)):  
    [train_input, train_target, cv_input, cv_target, test_input, test_target,train_init, cv_init, test_init] = torch.load(dataFolderName + dataFileName[i], map_location=device)
-   train_input_list.append((train_input, SoW[i]))
-   train_target_list.append((train_target, SoW[i]))
+   train_input_list.append((train_input, SoW[i])) #input = y
+   train_target_list.append((train_target, SoW[i])) #target = x
    cv_input_list.append((cv_input, SoW[i]))
    cv_target_list.append((cv_target, SoW[i]))
    test_input_list.append((test_input, SoW[i]))
    test_target_list.append((test_target, SoW[i]))
    train_init_list.append(train_init)
    cv_init_list.append(cv_init)
-   test_init_list.append(test_init)
+   test_init_list.append(test_init) #=x0
 
 ##############################
 ### Evaluate Kalman Filter ###
@@ -201,7 +204,7 @@ for i in range(len(SoW)):
    KalmanNet_Pipeline.NNTest(sys_model[i], test_input_list[i][0], test_target_list[i][0], path_results)
 
 ### frozen KNet weights, train hypernet to generate CM weights on multiple datasets
-# load frozen weights
+# load frozen weights from file where pipeline saved it
 frozen_weights = torch.load(path_results + 'knet_best-model.pt', map_location=device) 
 ### frozen KNet weights, train hypernet to generate CM weights on multiple datasets
 args.knet_trainable = False # frozen KNet weights

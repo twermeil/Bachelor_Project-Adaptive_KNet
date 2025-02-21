@@ -265,7 +265,7 @@ class Pipeline_cm:
                     self.MSE_cv_dB_opt = self.MSE_cv_dB_epoch[ti]
                     self.MSE_cv_idx_opt = ti
                     
-                    torch.save(self.hnet.state_dict(), path_results + 'hnet_best-model.pt')
+                    torch.save(self.hnet.state_dict(), path_results + 'hnet_best-model.pt') #saving best model for further loading
 
             ########################
             ### Training Summary ###

@@ -25,9 +25,9 @@ class KalmanFilter:
    
     # Predict
 
-    def Predict(self):
+    def Predict(self): # = equation 2
         # Predict the 1-st moment of x
-        self.m1x_prior = torch.bmm(self.batched_F, self.m1x_posterior).to(self.device)
+        self.m1x_prior = torch.bmm(self.batched_F, self.m1x_posterior).to(self.device) #batch matrix multiplication
 
         # Predict the 2-nd moment of x
         self.m2x_prior = torch.bmm(self.batched_F, self.m2x_posterior)
@@ -52,12 +52,12 @@ class KalmanFilter:
         self.KG_list.append(self.KG) 
 
     # Innovation
-    def Innovation(self, y):
+    def Innovation(self, y): # real y - estimated y
         self.dy = y - self.m1y
         self.dy_list.append(self.dy) # for Noise Estimation use
 
     # Compute Posterior
-    def Correct(self):
+    def Correct(self): # equation 3 
         # Compute the 1-st posterior moment
         self.m1x_posterior = self.m1x_prior + torch.bmm(self.KG, self.dy)
 

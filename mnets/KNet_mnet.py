@@ -389,10 +389,10 @@ class KalmanNetNN(torch.nn.Module):
     def KNet_step(self, y):
 
         # Compute Priors
-        self.step_prior()
+        self.step_prior() #eq.2
 
         # Compute Kalman Gain
-        self.step_KGain_est(y)
+        self.step_KGain_est(y) #Kgain computed from neural network (fig.4)
 
         # Innovation
         self.dy = y - self.m1y # [batch_size, n, 1]
@@ -412,7 +412,7 @@ class KalmanNetNN(torch.nn.Module):
         return self.m1x_posterior
 
     ########################
-    ### Kalman Gain Step ###
+    ### Kalman Gain Step ### = fig.4 (RNN + FC layer) 
     ########################
     def KGain_step(self, obs_diff, obs_innov_diff, fw_evol_diff, fw_update_diff):
 
