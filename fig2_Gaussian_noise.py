@@ -17,6 +17,9 @@ from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
 from pipelines.Pipeline_cm import Pipeline_cm
 from pipelines.Pipeline_EKF import Pipeline_EKF
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 print("Pipeline Start")
 
 ################
@@ -176,14 +179,14 @@ for i in range(len(SoW)):
 ### Evaluate Kalman Filter ###
 ##############################
 
-#print("Evaluate Kalman Filter True")
-#for i in range(len(SoW)):
-   #test_input = test_input_list[i][0]
-   #test_target = test_target_list[i][0]
-   #test_init = test_init_list[i]  
-   #test_lengthMask = None 
-   #print(f"Dataset {i}") 
-   #[MSE_KF_linear_arr, MSE_KF_linear_avg, MSE_KF_dB_avg, KF_out] = KFTest(args, sys_model[i], test_input, test_target, #test_lengthMask=test_lengthMask)
+print("Evaluate Kalman Filter True")
+for i in range(len(SoW)):
+   test_input = test_input_list[i][0]
+   test_target = test_target_list[i][0]
+   test_init = test_init_list[i]  
+   test_lengthMask = None 
+   print(f"Dataset {i}") 
+   [MSE_KF_linear_arr, MSE_KF_linear_avg, MSE_KF_dB_avg, KF_out] = KFTest(args, sys_model[i], test_input, test_target, test_lengthMask=test_lengthMask)
 
 
 ##################################
@@ -335,12 +338,47 @@ print('Test points : ', test_points)
 
 ## Kalmanfilter points ##
 
-#kf_curve = MSE_KF_linear_arr
-#print('KF: ', kf_curve)
+kf_pts = KF_out
+print('KF: ', kf_pts)
+
+## Figure ##
+
+#fig, axes = plt.subplots(1, 2, figsize=(12, 5), sharey=True)
+
+# ---- Left Plot ----
+#ax = axes[0]
+#ax.grid(True)
+
+#x = np.linspace(-10, 20, 100)
+#x1 = [-10, 0, 10, 20] # = 1/r2 [dB]
+#x2 = [0, 10, 20, -10, 10, 20, -10, 0, 20, -10, 0, 10]
+
+# Dashed lines for Kalman Filter (KF)
+#ax.plot(x, kf_pts[0], 'r--', linewidth=2, label='SoW$_t$=-20dB')
+#ax.plot(x, kf_pts[1], 'g--', linewidth=2, label='SoW$_t$=-10dB')
+#ax.plot(x, kf_pts[2], 'b--', linewidth=2, label='SoW$_t$=1dB')
+#ax.plot(x, kf_pts[3], 'm--', linewidth=2, label='SoW$_t$=10dB')
+
+# Markers for AKNet training and inference
+
+#train pts
+#ax.plot(x1[0], train_pts[0], 'ro', markersize=8, label='AKNet: training')#SoW = -20
+#ax.plot(x1[1], train_pts[1], 'go', markersize=8, label='AKNet: training')#SoW = -10
+#ax.plot(x1[2], train_pts[2], 'bo', markersize=8, label='AKNet: training')#SoW = 0
+#ax.plot(x1[3], train_pts[3], 'mo', markersize=8, label='AKNet: training')#SoW = 10
+
+#test pts
+#ax.plot(x2[:3], test_points[:3], 'r+', markersize=8, label='AKNet: inference')#SoW = -20
+#ax.plot(x2[3:6], test_points[3:6], 'g+', markersize=8, label='AKNet: inference')#SoW = -10
+#ax.plot(x2[6:9], test_points[6:9], 'b+', markersize=8, label='AKNet: inference')#SoW = 0
+#ax.plot(x2[9:], test_points[9:], 'm+', markersize=8, label='AKNet: inference')#SoW = 10
+
+# Labels and Legend
+#ax.set_xlabel('$1/r_t^2$ [dB]')
+#ax.set_ylabel('MSE LOSS [dB]')
+#ax.legend(loc='lower left')
 
 ## Close wandb run
 if args.wandb_switch: 
    wandb.finish() 
-
-
 

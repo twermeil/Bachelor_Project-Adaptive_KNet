@@ -169,19 +169,19 @@ for i in range(len(SoW)):
    test_target_list.append((test_target, SoW[i]))
    train_init_list.append(train_init)
    cv_init_list.append(cv_init)
-   test_init_list.append(test_init) #=x0
+   test_init_list.append(test_init) # = x0
 
 ##############################
 ### Evaluate Kalman Filter ###
 ##############################
-# print("Evaluate Kalman Filter True")
-# for i in range(len(SoW)):
-#    test_input = test_input_list[i][0]
-#    test_target = test_target_list[i][0]
-#    test_init = test_init_list[i]  
-#    test_lengthMask = None 
-#    print(f"Dataset {i}") 
-#    [MSE_KF_linear_arr, MSE_KF_linear_avg, MSE_KF_dB_avg, KF_out] = KFTest(args, sys_model[i], test_input, test_target, test_lengthMask=test_lengthMask)
+print("Evaluate Kalman Filter True")
+for i in range(len(SoW)):
+   test_input = test_input_list[i][0]
+   test_target = test_target_list[i][0]
+   test_init = test_init_list[i]  
+   test_lengthMask = None 
+   print(f"Dataset {i}") 
+   [MSE_KF_linear_arr, MSE_KF_linear_avg, MSE_KF_dB_avg, KF_out] = KFTest(args, sys_model[i], test_input, test_target, test_lengthMask=test_lengthMask)
 
 
 ##################################
