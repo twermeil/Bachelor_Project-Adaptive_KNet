@@ -203,7 +203,7 @@ KalmanNet_Pipeline = Pipeline_EKF(strTime, "KNet", "KalmanNet")
 KalmanNet_Pipeline.setssModel(sys_model[i])
 KalmanNet_Pipeline.setModel(KalmanNet_model)
 KalmanNet_Pipeline.setTrainingParams(args)
-# KalmanNet_Pipeline.NNTrain(sys_model[i], cv_input_list[i][0], cv_target_list[i][0], train_input_list[i][0], train_target_list[i][0], path_results)
+KalmanNet_Pipeline.NNTrain(sys_model[i], cv_input_list[i][0], cv_target_list[i][0], train_input_list[i][0], train_target_list[i][0], path_results)
 for i in range(len(SoW)):
    print(f"Dataset {i}") 
    KalmanNet_Pipeline.NNTest(sys_model[i], test_input_list[i][0], test_target_list[i][0], path_results)
@@ -338,7 +338,7 @@ print('Test points : ', test_points)
 
 ## Kalmanfilter points ##
 
-kf_pts = KF_out
+kf_pts = MSE_KF_dB_avg
 print('KF: ', kf_pts)
 
 ## Figure ##

@@ -57,7 +57,7 @@ def KFTest(args, SysModel, test_input, test_target, allStates=True,\
     print("Kalman Filter - STD:", KF_std_dB, "[dB]")
     # Print Run Time
     print("Inference Time:", t)
-    return [MSE_KF_linear_arr, MSE_KF_linear_avg, MSE_KF_dB_avg, KF_out]
+    return [MSE_KF_linear_arr, MSE_KF_linear_avg, MSE_KF_dB_avg, KF_out] #KF_out = predicted sequence x, MSE_KF_dB_avg = MSE array
 
 
 
