@@ -12,7 +12,11 @@ from filters.KalmanFilter_test import KFTest
 
 from hnets.hnet import HyperNetwork
 from hnets.hnet_deconv import hnet_deconv
-from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
+
+if m==2: # 2x2 system
+   from mnets.KNet_mnet import KalmanNetNN as KNet_mnet
+else: # 5x5, 10x10 system
+   from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
 
 from pipelines.Pipeline_cm import Pipeline_cm
 from pipelines.Pipeline_EKF import Pipeline_EKF
@@ -93,14 +97,14 @@ args.in_mult_KNet = 40
 args.out_mult_KNet = 40
 args.n_steps = 50000
 #already tuned parameters
-args.n_batch = 32 
-args.lr = 1e-3
-args.wd = 1e-3
+args.n_batch = 32 #how many samples for GD --> the higher the more stable gradient, but may overfit the training batch
+args.lr = 1e-3 #learning rate (larger --> loss decrease faster but more unstable)
+args.wd = 1e-3 #L2 ridge regression (higher --> more regularization --> more risk of underfitting)
 
 # training parameters for Hypernet
 args.hnet_arch = "GRU" # "deconv" or "GRU
 if args.hnet_arch == "GRU": # settings for GRU hnet
-   args.hnet_hidden_size_discount = 10
+   args.hnet_hidden_size_discount = 100 #by how much you divide the layer's hidden size (see hnet.py)
 elif args.hnet_arch == "deconv": # settings for deconv hnet
    # 2x2 system
    embedding_dim = 4
@@ -140,7 +144,7 @@ for i in range(len(SoW)):
    sys_model.append(sys_model_i)
 
 ### paths ##################################################
-path_results = 'simulations/linear_canonical/results/2x2/exp/'
+path_results = 'simulations/linear_canonical/results/2x2/normal/'
 dataFolderName = 'data/linear_canonical/2x2/exp' + '/'
 dataFileName = []
 for i in range(len(SoW)):
@@ -203,7 +207,7 @@ KalmanNet_Pipeline = Pipeline_EKF(strTime, "KNet", "KalmanNet")
 KalmanNet_Pipeline.setssModel(sys_model[i])
 KalmanNet_Pipeline.setModel(KalmanNet_model)
 KalmanNet_Pipeline.setTrainingParams(args)
-KalmanNet_Pipeline.NNTrain(sys_model[i], cv_input_list[i][0], cv_target_list[i][0], train_input_list[i][0], train_target_list[i][0], path_results)
+#KalmanNet_Pipeline.NNTrain(sys_model[i], cv_input_list[i][0], cv_target_list[i][0], train_input_list[i][0], train_target_list[i][0], path_results)
 for i in range(len(SoW)):
    print(f"Dataset {i}") 
    KalmanNet_Pipeline.NNTest(sys_model[i], test_input_list[i][0], test_target_list[i][0], path_results)

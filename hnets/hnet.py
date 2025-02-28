@@ -19,7 +19,7 @@ class HyperNetwork(nn.Module):
         input_size = 1 + SoW_len # 1 for position embedding
         self.position_embeddings = [0, 1] # shift/gain
 
-        self.hidden_size = int(output_size / args.hnet_hidden_size_discount)
+        self.hidden_size = int(output_size / args.hnet_hidden_size_discount) #hidden sizes of layers
 
         self.fc1 = nn.Linear(input_size, self.hidden_size).to(self.device)
         self.gru = nn.GRU(self.hidden_size, self.hidden_size).to(self.device)
