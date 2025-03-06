@@ -312,29 +312,29 @@ for i in range(len(SoW2)):
    DataGen(args, sys_model2[i], dataFolderName + dataFileName[i])
    
 print("Data Load")
-train_input_list = []
-train_target_list = []
-cv_input_list = []
-cv_target_list = []
-test_input_list = []
-test_target_list = []
-train_init_list = []
-cv_init_list = []
-test_init_list = []
+train_input_list2 = []
+train_target_list2 = []
+cv_input_list2 = []
+cv_target_list2 = []
+test_input_list2 = []
+test_target_list2 = []
+train_init_list2 = []
+cv_init_list2 = []
+test_init_list2 = []
 
 for i in range(len(SoW2)):  
-   [train_input, train_target, cv_input, cv_target, test_input, test_target,train_init, cv_init, test_init] = torch.load(dataFolderName + dataFileName[i], map_location=device)
-   train_input_list.append((train_input, SoW2[i])) #input = y
-   train_target_list.append((train_target, SoW2[i])) #target = x
-   cv_input_list.append((cv_input, SoW2[i]))
-   cv_target_list.append((cv_target, SoW2[i]))
-   test_input_list.append((test_input, SoW2[i]))
-   test_target_list.append((test_target, SoW2[i]))
-   train_init_list.append(train_init)
-   cv_init_list.append(cv_init)
-   test_init_list.append(test_init) #=x0
+   [train_input2, train_target2, cv_input2, cv_target2, test_input2, test_target2,train_init2, cv_init2, test_init2] = torch.load(dataFolderName + dataFileName[i], map_location=device)
+   train_input_list2.append((train_input2, SoW2[i])) #input = y
+   train_target_list2.append((train_target2, SoW2[i])) #target = x
+   cv_input_list2.append((cv_input2, SoW2[i]))
+   cv_target_list2.append((cv_target2, SoW2[i]))
+   test_input_list2.append((test_input2, SoW2[i]))
+   test_target_list2.append((test_target2, SoW2[i]))
+   train_init_list2.append(train_init2)
+   cv_init_list2.append(cv_init2)
+   test_init_list2.append(test_init2) #=x0
    
-hknet_pipeline.NNTest_alldatasets(SoW_test_range2, sys_model2, test_input_list, test_target_list, path_results, test_init_list)
+hknet_pipeline.NNTest_alldatasets(SoW_test_range2, sys_model2, test_input_list2, test_target_list2, path_results, test_init_list2)
 
 test_points = hknet_pipeline.MSE_test_dB_avg
 
