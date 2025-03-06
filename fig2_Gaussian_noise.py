@@ -306,10 +306,16 @@ for i in range(len(SoW2)):
    sys_model_i.InitSequence(m1_0, m2_0)
    sys_model2.append(sys_model_i)
    
+### paths ##################################################
+dataFolderName2 = 'data/linear_canonical/2x2/normal' + '/'
+dataFileName2 = []
+for i in range(len(SoW2)):
+   dataFileName2.append('r2=' + str(r2_dB2[i].item())+"dB"+"_" +"q2="+ str(q2_dB2[i].item())+"dB" + '.pt')
+   
 ### Data Generation
 print("Start Data Gen")
 for i in range(len(SoW2)):
-   DataGen(args, sys_model2[i], dataFolderName + dataFileName[i])
+   DataGen(args, sys_model2[i], dataFolderName2 + dataFileName2[i])
    
 print("Data Load")
 train_input_list2 = []
@@ -323,7 +329,7 @@ cv_init_list2 = []
 test_init_list2 = []
 
 for i in range(len(SoW2)):  
-   [train_input2, train_target2, cv_input2, cv_target2, test_input2, test_target2,train_init2, cv_init2, test_init2] = torch.load(dataFolderName + dataFileName[i], map_location=device)
+   [train_input2, train_target2, cv_input2, cv_target2, test_input2, test_target2 ,train_init2, cv_init2, test_init2] = torch.load(dataFolderName2 + dataFileName2[i], map_location=device)
    train_input_list2.append((train_input2, SoW2[i])) #input = y
    train_target_list2.append((train_target2, SoW2[i])) #target = x
    cv_input_list2.append((cv_input2, SoW2[i]))
