@@ -279,15 +279,15 @@ SoW2 = torch.tensor([[0, -20], [-10, -30], [-20, -40], #SoW = -20
                      [10, 20], [0, 10], [-10, 0]]) #SoW = 10
 
 SoW_train_range2 = list(range(len(SoW2))) # first *** number of datasets are used for training
-print("SoW_train_range: ", SoW_train_range2)
+print("SoW_train_range_2: ", SoW_train_range2)
 SoW_test_range2 = list(range(len(SoW2))) # last *** number of datasets are used for testing
 # noise
 r2_dB2 = SoW2[:, 0]
 q2_dB2 = SoW2[:, 1]
 
-r2_2 = 10 ** (r2_dB/10) # = 10 / 1 / 10^-1 / 10^-2
+r2_2 = 10 ** (r2_dB2/10) # = 10 / 1 / 10^-1 / 10^-2
 # => 1/r2 = 10^-1 / 1 / 10 / 10^2 
-q2_2 = 10 ** (q2_dB/10) # = 10^-1 / 10^-1 / 10^-1 / 10^-1
+q2_2 = 10 ** (q2_dB2/10) # = 10^-1 / 10^-1 / 10^-1 / 10^-1
 
 # change SoW to q2/r2 ratio
 SoW2 = q2_2/r2_2 # = 10^-2 / 10^-1 / 1 / 10
