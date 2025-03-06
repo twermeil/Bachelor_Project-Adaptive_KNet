@@ -346,8 +346,8 @@ hknet_pipeline.NNTest_alldatasets(SoW_test_range2, sys_model2, test_input_list2,
 
 ## Kalmanfilter points ##
 
-kf_pts = MSE_KF_dB_avg
-print('KF: ', kf_pts)
+#kf_pts = MSE_KF_dB_avg
+#print('KF: ', kf_pts)
 
 ## Figure ##
 
