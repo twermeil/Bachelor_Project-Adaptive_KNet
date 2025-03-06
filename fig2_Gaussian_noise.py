@@ -257,6 +257,7 @@ if args.wandb_switch:
 ## Train Neural Networks
 #hknet_pipeline.NNTrain_mixdatasets(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results,cv_init_list,train_init_list)
 
+print("Training points: ")
 ## Test Neural Networks for each dataset  
 hknet_pipeline.NNTest_alldatasets(SoW_test_range, sys_model, test_input_list, test_target_list, path_results,test_init_list)
 
@@ -268,8 +269,7 @@ print("Figure Points")
 
 ## training points ##
 
-train_pts = hknet_pipeline.MSE_test_dB_avg
-print("Training points: ", train_pts)
+#train_pts = hknet_pipeline.MSE_test_linear_arr
 
 ## test points ##
 
@@ -340,11 +340,9 @@ for i in range(len(SoW2)):
    cv_init_list2.append(cv_init2)
    test_init_list2.append(test_init2) #=x0
    
+print("Test Points: ")
+   
 hknet_pipeline.NNTest_alldatasets(SoW_test_range2, sys_model2, test_input_list2, test_target_list2, path_results, test_init_list2)
-
-test_points = hknet_pipeline.MSE_test_dB_avg
-
-print('Test points : ', test_points)
 
 ## Kalmanfilter points ##
 
