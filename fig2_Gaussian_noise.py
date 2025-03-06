@@ -145,7 +145,7 @@ for i in range(len(SoW)):
 
 ### paths ##################################################
 path_results = 'simulations/linear_canonical/results/2x2/normal/'
-dataFolderName = 'data/linear_canonical/2x2/exp' + '/'
+dataFolderName = 'data/linear_canonical/2x2/normal_train' + '/'
 dataFileName = []
 for i in range(len(SoW)):
    dataFileName.append('r2=' + str(r2_dB[i].item())+"dB"+"_" +"q2="+ str(q2_dB[i].item())+"dB" + '.pt')
@@ -307,7 +307,7 @@ for i in range(len(SoW2)):
    sys_model2.append(sys_model_i)
    
 ### paths ##################################################
-dataFolderName2 = 'data/linear_canonical/2x2/normal' + '/'
+dataFolderName2 = 'data/linear_canonical/2x2/normal_test' + '/'
 dataFileName2 = []
 for i in range(len(SoW2)):
    dataFileName2.append('r2=' + str(r2_dB2[i].item())+"dB"+"_" +"q2="+ str(q2_dB2[i].item())+"dB" + '.pt')
