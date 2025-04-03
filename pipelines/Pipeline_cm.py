@@ -68,7 +68,7 @@ class Pipeline_cm:
             self.N_B = args.n_batch # Number of Samples in Batch
 
         self.learningRate = args.lr # Learning Rate
-        self.weightDecay = args.wd # L2 Weight Regularization - Weight Decay
+        self.weightDecay = args.hypernet_wd # L2 Weight Regularization - Weight Decay
         self.alpha = args.alpha # Composition loss factor
         # MSE LOSS Function
         self.loss_fn = nn.MSELoss(reduction='mean') # Loss Function for single dataset and CV
