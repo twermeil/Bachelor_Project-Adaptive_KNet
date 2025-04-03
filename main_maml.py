@@ -50,6 +50,8 @@ else:
 args.proc_noise_distri = "normal"
 args.meas_noise_distri = "normal"
 
+args.mixed_dataset = True #to use batch size list
+
 F = F.to(device)
 H = H.to(device)
 if args.proc_noise_distri == "normal":
@@ -90,7 +92,7 @@ args.in_mult_KNet = 40
 args.out_mult_KNet = 40
 args.n_steps = 50000
 #already tuned parameters
-args.n_batch = 32 
+args.n_batch = 32
 args.update_lr = 1e-3
 args.meta_lr = 1e-3
 args.spt_percentage = 0.3
@@ -106,10 +108,10 @@ elif args.hnet_arch == "deconv": # settings for deconv hnet
 else:
    raise Exception("args.hnet_arch not recognized")
 n_steps = 10000
-n_batch_list = [32,32,32,32] # batch size for each dataset
+args.n_batch_list = [32,32,32,32] # batch size for each dataset
 #lr and wd for hypernet (not used for knet)
 args.lr = 1e-3
-args.wd = 1e-3
+args.knet_wd = 1e-3
 args.hypernet_wd = 1e-3
 
 ### True model ##################################################
@@ -198,10 +200,13 @@ for i in range(len(SoW)):
     KalmanNet_model = KNet_mnet()
     KalmanNet_model.NNBuild(sys_model[i], args)
     print("Number of trainable parameters for KalmanNet on dataset ", i," : ",sum(p.numel() for p in KalmanNet_model.parameters() if p.requires_grad))
+
 ## Train Neural Network
+KalmanNet_model = KNet_mnet()
+KalmanNet_model.NNBuild(sys_model[0], args)
 KalmanNet_Pipeline = Pipeline_EKF_MAML(strTime, "KNet", "KalmanNet")
 #KalmanNet_Pipeline.setssModel(sys_model[i]) #don't use it in MAML_train
-#KalmanNet_Pipeline.setModel(KalmanNet_model)
+KalmanNet_Pipeline.setModel(KalmanNet_model)
 KalmanNet_Pipeline.setTrainingParams(args)
 KalmanNet_Pipeline.MAML_train(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results, 
                               cv_init_list, train_init_list)

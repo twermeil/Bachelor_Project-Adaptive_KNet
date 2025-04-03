@@ -57,8 +57,18 @@ def general_settings():
                         help='input batch size for mixed dataset training')
     parser.add_argument('--lr', type=float, default=1e-3, metavar='LR',
                         help='learning rate (default: 1e-3)')
+    parser.add_argument('--update_lr', type=float, default=1e-3, metavar='Update_LR',
+                        help='update learning rate for MAML (default: 1e-3)')
+    parser.add_argument('--meta_lr', type=float, default=1e-3, metavar='Meta_LR',
+                        help='meta learning rate for MAML (default: 1e-3)')
     parser.add_argument('--wd', type=float, default=1e-4, metavar='WD',
                         help='weight decay (default: 1e-4)')
+    parser.add_argument('--knet_wd', type=float, default=1e-4, metavar='KNET_WD',
+                        help='Kalmannet weight decay (default: 1e-4)')
+    parser.add_argument('--hypernet_wd', type=float, default=1e-4, metavar='Hypernet_WD',
+                        help='hypernetwork weight decay (default: 1e-4)')
+    parser.add_argument('--spt_percentage', type=float, default=0.3, metavar='SPT_Percentage',
+                        help='spt_percentage for MAML (default: 0.3)')
     
     parser.add_argument('--grid_size_dB', type=float, default=1, metavar='grid_size_dB',
                         help='input grid size for grid search of SoW in dB')

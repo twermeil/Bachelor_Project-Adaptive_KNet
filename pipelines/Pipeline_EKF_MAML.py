@@ -13,7 +13,7 @@ from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
 
 
     
-class Pipeline_EKF:
+class Pipeline_EKF_MAML:
 
     def __init__(self, Time, folderName, modelName): #where to save best model for further loading
         super().__init__()
@@ -28,6 +28,9 @@ class Pipeline_EKF:
 
     def setssModel(self, ssModel): #sysmodel
         self.ssModel = ssModel
+    
+    def setModel(self, model):
+        self.model = model
 
     def setTrainingParams(self, args):
         self.args = args
@@ -43,7 +46,7 @@ class Pipeline_EKF:
             self.N_B = args.n_batch # Number of Samples in Batch
 
         self.learningRate = args.lr # Learning Rate
-        self.weightDecay = args.wd # L2 Weight Regularization - Weight Decay
+        self.weightDecay = args.knet_wd # L2 Weight Regularization - Weight Decay
         # MSE LOSS Function
         self.loss_fn = nn.MSELoss(reduction='mean') # Loss Function for single dataset and CV
         # Loss Function for multiple datasets
@@ -55,7 +58,7 @@ class Pipeline_EKF:
         #new args param for tuning
         self.spt_percentage = args.spt_percentage # 0.3
         
-        self.model = KNet_mnet().to(self.device)
+        #self.model = KNet_mnet().to(self.device)
 
         # Use the optim package to define an Optimizer that will update the weights of
         # the model for us. Here we will use Adam; the optim package contains many other
@@ -281,7 +284,7 @@ class Pipeline_EKF:
     def MAML_train(self, SoW_train_range, SysModel, cv_input_tuple, cv_target_tuple, train_input_tuple, train_target_tuple, path_results,
                    cv_init, train_init, MaskOnState=False, train_lengthMask=None,cv_lengthMask=None):
 
-        task_num = SoW_train_range
+        task_num = len(SoW_train_range)
         self.MSE_cv_dB_opt = 1000
         self.MSE_cv_idx_opt = 0
         # Init MSE Loss
@@ -456,7 +459,7 @@ class Pipeline_EKF:
             if count_num == 0:
                 return 0, 0
 
-            meta_loss = meta_loss / task_num
+            meta_loss = meta_loss/task_num
             meta_loss.backward() #equation 21 on paper, computes Gtb
             self.MSE_train_linear_epoch[ti] = meta_loss
             self.MSE_train_dB_epoch[ti] = 10 * torch.log10(self.MSE_train_linear_epoch[ti])
