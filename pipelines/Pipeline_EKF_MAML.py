@@ -282,7 +282,7 @@ class Pipeline_EKF_MAML:
         return [self.MSE_cv_linear_epoch, self.MSE_cv_dB_epoch, self.MSE_train_linear_epoch, self.MSE_train_dB_epoch]
     
     def MAML_train(self, SoW_train_range, SysModel, cv_input_tuple, cv_target_tuple, train_input_tuple, train_target_tuple, path_results,
-                   cv_init, train_init, MaskOnState=False, train_lengthMask=None,cv_lengthMask=None):
+                   cv_init, train_init, args, MaskOnState=False, train_lengthMask=None,cv_lengthMask=None):
 
         task_num = len(SoW_train_range)
         self.MSE_cv_dB_opt = 1000
@@ -316,6 +316,7 @@ class Pipeline_EKF_MAML:
             for i in range(task_num):
                 
                 task_model = KNet_mnet().to(self.device) # = new theta_i'
+                task_model.NNBuild(SysModel[i], args)
                 task_model.batch_size = self.N_B[i]
                 task_model.load_state_dict(self.model.state_dict()) #base_net = original theta
                 #loading original theta to avoid using previous theta'
@@ -346,7 +347,7 @@ class Pipeline_EKF_MAML:
                 N_E_query = len(train_input_tuple[i][0])-N_E_spt # Number of Query Training Sequences
                 
                 # Randomly select N_B support training sequences
-                assert self.N_B[i] <= torch.minimum(N_E_spt, N_E_query) # N_B must be smaller than N_E
+                assert self.N_B[i] <= min(N_E_spt, N_E_query) # N_B must be smaller than N_E
                 n_e_spt = random.sample(range(N_E_spt), k=self.N_B[i])
                 dataset_index = 0
                 for index in n_e_spt:
@@ -362,7 +363,7 @@ class Pipeline_EKF_MAML:
                     dataset_index += 1
                 
                 # Randomly select N_B query training sequences
-                assert self.N_B[i] <= torch.minimum(N_E_spt, N_E_query) # N_B must be smaller than N_E
+                assert self.N_B[i] <= min(N_E_spt, N_E_query) # N_B must be smaller than N_E
                 n_e_query = random.sample(range(N_E_spt, N_E_spt + N_E_query), k=self.N_B[i])
                 dataset_index = 0
                 for index in n_e_query:

@@ -209,7 +209,7 @@ KalmanNet_Pipeline = Pipeline_EKF_MAML(strTime, "KNet", "KalmanNet")
 KalmanNet_Pipeline.setModel(KalmanNet_model)
 KalmanNet_Pipeline.setTrainingParams(args)
 KalmanNet_Pipeline.MAML_train(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results, 
-                              cv_init_list, train_init_list)
+                              cv_init_list, train_init_list, args)
 
 for i in range(len(SoW)):
    print(f"Dataset {i}") 
