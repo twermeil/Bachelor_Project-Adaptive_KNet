@@ -93,9 +93,10 @@ args.out_mult_KNet = 40
 args.n_steps = 50000
 #already tuned parameters
 args.n_batch = 32
-args.update_lr = 1e-3
-args.meta_lr = 1e-3
+args.update_lr = 1e-3 #0.4
+args.meta_lr = 1e-3 #0.001
 args.spt_percentage = 0.3
+args.update_step = 5
 
 # training parameters for Hypernet
 args.hnet_arch = "GRU" # "deconv" or "GRU
@@ -108,7 +109,8 @@ elif args.hnet_arch == "deconv": # settings for deconv hnet
 else:
    raise Exception("args.hnet_arch not recognized")
 n_steps = 10000
-args.n_batch_list = [32,32,32,32] # batch size for each dataset
+args.n_batch_list = [32,32,32,32] # batch size for each support dataset
+args.n_batch_list_query = [32,32,32,32] # batch size for each query dataset
 #lr and wd for hypernet (not used for knet)
 args.lr = 1e-3
 args.knet_wd = 1e-3

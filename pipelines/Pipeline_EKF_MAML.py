@@ -42,6 +42,7 @@ class Pipeline_EKF_MAML:
 
         if args.mixed_dataset:
             self.N_B = args.n_batch_list # Number of Samples in Batch for each dataset
+            self.N_B_query = args.n_batch_list_query
         else:
             self.N_B = args.n_batch # Number of Samples in Batch
 
@@ -57,7 +58,7 @@ class Pipeline_EKF_MAML:
         self.meta_lr = args.meta_lr  # 0.001 = beta
         #new args param for tuning
         self.spt_percentage = args.spt_percentage # 0.3
-        
+        self.update_step = args.update_step # 5
         #self.model = KNet_mnet().to(self.device)
 
         # Use the optim package to define an Optimizer that will update the weights of
@@ -290,7 +291,7 @@ class Pipeline_EKF_MAML:
         # Init MSE Loss
         self.MSE_cv_linear_epoch = torch.zeros([self.N_steps])
         self.MSE_cv_dB_epoch = torch.zeros([self.N_steps])
-        #self.MSE_train_linear_epoch = torch.zeros([self.N_steps])
+        self.MSE_train_linear_epoch = torch.zeros([self.N_steps])
         self.MSE_train_dB_epoch = torch.zeros([self.N_steps])
         
         # dataset size
@@ -306,7 +307,7 @@ class Pipeline_EKF_MAML:
         for ti in range(0, self.N_steps):
             # torch.autograd.set_detect_anomaly(True)
             count_num = task_num #initialized to task_num for each step
-            meta_loss = torch.tensor(0.) #initialized to 0 for each step
+            meta_loss = torch.tensor(0., requires_grad=True, device=self.device) #initialized to 0 for each step
             is_qry_nan = False
             gradients = {}
             for name, param in self.model.named_parameters():
@@ -321,7 +322,7 @@ class Pipeline_EKF_MAML:
                 task_model.load_state_dict(self.model.state_dict()) #base_net = original theta
                 #loading original theta to avoid using previous theta'
                 # Init Hidden State
-                task_model.init_hidden()
+                task_model.init_hidden() #must initialize hidden state
                 inner_optimizer = torch.optim.Adam(task_model.weights.parameters(), lr=self.update_lr, weight_decay=self.weightDecay)
                 # Init Training Batch tensors
                 y_training_batch_spt = torch.zeros([self.N_B[i], sysmdl_n, sysmdl_T]).to(self.device)
@@ -347,7 +348,7 @@ class Pipeline_EKF_MAML:
                 N_E_query = len(train_input_tuple[i][0])-N_E_spt # Number of Query Training Sequences
                 
                 # Randomly select N_B support training sequences
-                assert self.N_B[i] <= min(N_E_spt, N_E_query) # N_B must be smaller than N_E
+                assert self.N_B[i] <= N_E_spt # N_B must be smaller than N_E
                 n_e_spt = random.sample(range(N_E_spt), k=self.N_B[i])
                 dataset_index = 0
                 for index in n_e_spt:
@@ -363,7 +364,7 @@ class Pipeline_EKF_MAML:
                     dataset_index += 1
                 
                 # Randomly select N_B query training sequences
-                assert self.N_B[i] <= min(N_E_spt, N_E_query) # N_B must be smaller than N_E
+                assert self.N_B[i] <= N_E_query # N_B must be smaller than N_E
                 n_e_query = random.sample(range(N_E_spt, N_E_spt + N_E_query), k=self.N_B[i])
                 dataset_index = 0
                 for index in n_e_query:
@@ -384,9 +385,9 @@ class Pipeline_EKF_MAML:
                 # Forward Computation
                 for t in range(0, sysmdl_T):
                     if self.args.use_context_mod:
-                        x_out_training_batch_spt[:, :, t] = torch.squeeze(self.model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
+                        x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
                     else:
-                        x_out_training_batch_spt[:, :, t] = torch.squeeze(self.model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
+                        x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
                     
                 # Compute Training Loss
                 # no composition loss, no mask                 
@@ -402,13 +403,12 @@ class Pipeline_EKF_MAML:
 
                 for k in range(1, self.update_step):
                     
-                    self.model.InitSequence(train_init_batch_query, sysmdl_T)
                     # Forward Computation
                     for t in range(0, sysmdl_T):
                         if self.args.use_context_mod:
-                            x_out_training_batch_spt[:, :, t] = torch.squeeze(self.model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
+                            x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
                         else:
-                            x_out_training_batch_spt[:, :, t] = torch.squeeze(self.model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
+                            x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
                     
                     # Compute Training Loss
                     # no composition loss, no mask                 
@@ -416,37 +416,28 @@ class Pipeline_EKF_MAML:
                     if torch.isnan(MSE_trainbatch_linear_LOSS_spt[i]).item():
                         count_num -= 1
                         continue
-
+                    
                     inner_optimizer.zero_grad()
                     MSE_trainbatch_linear_LOSS_spt[i].backward() #computes gradient of step 6
                     torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1) #clip on gradient to stabilize (clip the value)
                     inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
 
-                    if torch.isnan(MSE_trainbatch_linear_LOSS_spt[i]).item():
-                        count_num -= 1
-                        is_qry_nan = True
-                        break
-
-                    inner_optimizer.zero_grad()
-                    MSE_trainbatch_linear_LOSS_spt[i].backward()
-                    torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1)
-                    inner_optimizer.step() #theta -> theta'
-
                 if is_qry_nan:
                     is_qry_nan = False
                     continue
-
+                
+                task_model.batch_size = self.N_B_query[i]
                 task_model.init_hidden() # task model has theta'
+                task_model.InitSequence(train_init_batch_query, sysmdl_T)
                 
                 #compute the loss with theta'
-                MSE_trainbatch_linear_LOSS_query = torch.zeros([len(train_target_tuple)]) # inner loss for each task on query set
-                task_model.InitSequence(train_init_batch_query, sysmdl_T)   
+                MSE_trainbatch_linear_LOSS_query = torch.zeros([len(train_target_tuple)]) # inner loss for each task on query set   
                 # Forward Computation
                 for t in range(0, sysmdl_T):
                     if self.args.use_context_mod:
-                        x_out_training_batch_query[:, :, t] = torch.squeeze(self.model(torch.unsqueeze(y_training_batch_query[:, :, t],2), train_input_tuple[i][1]))
+                        x_out_training_batch_query[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_query[:, :, t],2), train_input_tuple[i][1]))
                     else:
-                        x_out_training_batch_query[:, :, t] = torch.squeeze(self.model(torch.unsqueeze(y_training_batch_query[:, :, t],2)))
+                        x_out_training_batch_query[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_query[:, :, t],2)))
                     
                 # Compute Training Loss
                 # no composition loss, no mask                 
@@ -494,7 +485,7 @@ class Pipeline_EKF_MAML:
             self.model.batch_size = self.N_CV 
 
             with torch.no_grad():
-                for i in task_num: # dataset i 
+                for i in range(task_num): # dataset i 
                     if self.args.randomLength:
                         MSE_cv_linear_LOSS = torch.zeros([self.N_CV])
                     # Init Output
