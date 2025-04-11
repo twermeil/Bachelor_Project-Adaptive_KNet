@@ -210,12 +210,12 @@ KalmanNet_Pipeline = Pipeline_EKF_MAML(strTime, "KNet", "KalmanNet")
 #KalmanNet_Pipeline.setssModel(sys_model[i]) #don't use it in MAML_train
 KalmanNet_Pipeline.setModel(KalmanNet_model)
 KalmanNet_Pipeline.setTrainingParams(args)
-KalmanNet_Pipeline.MAML_train(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results, 
+KalmanNet_Pipeline.MAML_train_second(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results, 
                               cv_init_list, train_init_list, args)
 
-for i in range(len(SoW)):
-   print(f"Dataset {i}") 
-   KalmanNet_Pipeline.NNTest(sys_model, test_input_list[i][0], test_target_list[i][0], path_results)
+#for i in range(len(SoW)):
+   #print(f"Dataset {i}") 
+   #KalmanNet_Pipeline.NNTest_alldatasets(sys_model, test_input_list[i][0], test_target_list[i][0], path_results)
 
 ## Close wandb run
 if args.wandb_switch: 

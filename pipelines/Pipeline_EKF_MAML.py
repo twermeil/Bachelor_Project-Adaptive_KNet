@@ -282,7 +282,7 @@ class Pipeline_EKF_MAML:
             ###
         return [self.MSE_cv_linear_epoch, self.MSE_cv_dB_epoch, self.MSE_train_linear_epoch, self.MSE_train_dB_epoch]
     
-    def MAML_train(self, SoW_train_range, SysModel, cv_input_tuple, cv_target_tuple, train_input_tuple, train_target_tuple, path_results,
+    def MAML_train_second(self, SoW_train_range, SysModel, cv_input_tuple, cv_target_tuple, train_input_tuple, train_target_tuple, path_results,
                    cv_init, train_init, args, MaskOnState=False, train_lengthMask=None,cv_lengthMask=None):
 
         task_num = len(SoW_train_range)
@@ -314,13 +314,15 @@ class Pipeline_EKF_MAML:
                 if param.requires_grad:
                     gradients[name] = torch.zeros_like(param)
 
+            #MSE_trainbatch_linear_LOSS_spt = torch.zeros([len(SoW_train_range)]) # inner loss for each task on support set
+            
             for i in range(task_num):
                 
                 task_model = KNet_mnet().to(self.device) # = new theta_i'
                 task_model.NNBuild(SysModel[i], args)
-                task_model.batch_size = self.N_B[i]
                 task_model.load_state_dict(self.model.state_dict()) #base_net = original theta
                 #loading original theta to avoid using previous theta'
+                task_model.batch_size = self.N_B[i]
                 # Init Hidden State
                 task_model.init_hidden() #must initialize hidden state
                 inner_optimizer = torch.optim.Adam(task_model.weights.parameters(), lr=self.update_lr, weight_decay=self.weightDecay)
@@ -379,9 +381,8 @@ class Pipeline_EKF_MAML:
                     train_init_batch_query[dataset_index,:,0] = torch.squeeze(train_init[i][index])                  
                     dataset_index += 1
                 
-                MSE_trainbatch_linear_LOSS_spt = torch.zeros([len(train_target_tuple)]) # inner loss for each task on support set
-                
-                task_model.InitSequence(train_init_batch_spt, sysmdl_T)   
+                task_model.InitSequence(train_init_batch_spt, sysmdl_T)  
+                 
                 # Forward Computation
                 for t in range(0, sysmdl_T):
                     if self.args.use_context_mod:
@@ -391,16 +392,18 @@ class Pipeline_EKF_MAML:
                     
                 # Compute Training Loss
                 # no composition loss, no mask                 
-                MSE_trainbatch_linear_LOSS_spt[i] = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
-                if torch.isnan(MSE_trainbatch_linear_LOSS_spt[i]).item():
+                MSE_trainbatch_linear_LOSS_spt = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
+                if torch.isnan(MSE_trainbatch_linear_LOSS_spt).item():
                     count_num -= 1
                     continue
 
                 inner_optimizer.zero_grad()
-                MSE_trainbatch_linear_LOSS_spt[i].backward() #computes gradient of step 6
+                MSE_trainbatch_linear_LOSS_spt.backward() #computes gradient of step 6
                 torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1) #clip on gradient to stabilize (clip the value)
                 inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
 
+                losses = torch.zeros(self.update_step)
+                
                 for k in range(1, self.update_step):
                     
                     # Forward Computation
@@ -412,13 +415,13 @@ class Pipeline_EKF_MAML:
                     
                     # Compute Training Loss
                     # no composition loss, no mask                 
-                    MSE_trainbatch_linear_LOSS_spt[i] = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
-                    if torch.isnan(MSE_trainbatch_linear_LOSS_spt[i]).item():
+                    losses[k] = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
+                    if torch.isnan(losses[k]).item():
                         count_num -= 1
                         continue
                     
                     inner_optimizer.zero_grad()
-                    MSE_trainbatch_linear_LOSS_spt[i].backward() #computes gradient of step 6
+                    losses[k].backward() #computes gradient of step 6
                     torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1) #clip on gradient to stabilize (clip the value)
                     inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
 
@@ -431,7 +434,7 @@ class Pipeline_EKF_MAML:
                 task_model.InitSequence(train_init_batch_query, sysmdl_T)
                 
                 #compute the loss with theta'
-                MSE_trainbatch_linear_LOSS_query = torch.zeros([len(train_target_tuple)]) # inner loss for each task on query set   
+                #MSE_trainbatch_linear_LOSS_query = torch.zeros([len(train_target_tuple)]) # inner loss for each task on query set   
                 # Forward Computation
                 for t in range(0, sysmdl_T):
                     if self.args.use_context_mod:
@@ -441,12 +444,12 @@ class Pipeline_EKF_MAML:
                     
                 # Compute Training Loss
                 # no composition loss, no mask                 
-                MSE_trainbatch_linear_LOSS_query[i] = self.loss_fn_train(x_out_training_batch_query, train_target_batch_query)           
-                if torch.isnan(MSE_trainbatch_linear_LOSS_query[i]).item():
+                MSE_trainbatch_linear_LOSS_query = self.loss_fn_train(x_out_training_batch_query, train_target_batch_query)           
+                if torch.isnan(MSE_trainbatch_linear_LOSS_query).item():
                     count_num -= 1
                     continue
 
-                meta_loss = meta_loss + MSE_trainbatch_linear_LOSS_query[i]
+                meta_loss = meta_loss + MSE_trainbatch_linear_LOSS_query
 
             if count_num == 0:
                 return 0, 0

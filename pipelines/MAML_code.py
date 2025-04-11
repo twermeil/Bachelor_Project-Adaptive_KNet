@@ -73,6 +73,7 @@ class Meta(nn.Module):
             inner_optimizer.step()
 
             for k in range(1, self.update_step):
+                #eq. (19)
                 loss = self.my_filter.compute_x_post(state_spt[i], obs_spt[i], task_net=task_model)
                 if math.isnan(loss) or math.isnan(loss_q):
                     count_num = count_num - 1
@@ -80,10 +81,13 @@ class Meta(nn.Module):
                 inner_optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1)
+                # eq. (20)
                 inner_optimizer.step()
 
                 loss_q = self.my_filter.compute_x_post_qry(state_qry[i], obs_qry[i], task_net=task_model)
+                #eq. (21)
                 loss_q.backward()
+                #saved and repeated K times
                 torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1)
                 for name, param in task_model.named_parameters():
                     if param.grad is not None:
@@ -103,6 +107,7 @@ class Meta(nn.Module):
                         gradients[name] += temp_gradients[name].clone()
                         temp_gradients[name] = torch.zeros_like(param)
 
+            # losses to compute eq. (22-24) in outer loop
             losses += loss_q.clone()
 
         if count_num == 0:
@@ -148,6 +153,7 @@ class Meta(nn.Module):
             inner_optimizer.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1)
+            # eq. (15)
             inner_optimizer.step()
 
             for k in range(1, self.update_step):
@@ -161,6 +167,7 @@ class Meta(nn.Module):
                 inner_optimizer.zero_grad()
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1)
+                # eq. (15) for each k
                 inner_optimizer.step()
 
             if is_qry_nan:
@@ -175,6 +182,7 @@ class Meta(nn.Module):
         if count_num == 0:
             return 0, 0
 
+        #computation of loss/gradient for eq. (16)
         meta_loss = meta_loss / task_num
         meta_loss.backward()
 
@@ -191,6 +199,7 @@ class Meta(nn.Module):
                 param.grad = gradients[name].clone()
 
         torch.nn.utils.clip_grad_norm_(self.base_net.parameters(), 1)
+        # eq. (16)
         self.meta_optim.step()
 
         return 10 * torch.log10(meta_loss), count_num
