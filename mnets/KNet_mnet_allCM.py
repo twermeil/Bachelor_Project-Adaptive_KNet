@@ -36,6 +36,10 @@ class KalmanNetNN(torch.nn.Module):
 
         self.InitKGainNet(SysModel.prior_Q, SysModel.prior_Sigma, SysModel.prior_S, args, frozen_weights=frozen_weights)
        
+        self.loss_fn_train = nn.MSELoss(reduction='mean')
+        
+        self.training_first = True
+       
         return self.n_params_KNet
 
     ######################################
@@ -387,10 +391,17 @@ class KalmanNetNN(torch.nn.Module):
     ### Kalman Net Step ###
     #######################
     def KNet_step(self, y):
+        
+        if self.training_first:
+            self.m1x_posterior_previous = self.m1x_posterior.detach().clone()
 
         # Compute Priors
         self.step_prior()
 
+        if self.training_first:
+            self.state_pred_past = self.m1x_prior.detach().clone()
+            self.obs_past = y.detach().clone()
+        
         # Compute Kalman Gain
         self.step_KGain_est(y)
 
@@ -399,14 +410,15 @@ class KalmanNetNN(torch.nn.Module):
 
         # Compute the 1-st posterior moment
         INOV = torch.bmm(self.KGain, self.dy)
-        self.m1x_posterior_previous = self.m1x_posterior
+        self.training_first
+        self.m1x_posterior_previous = self.m1x_posterior.detach().clone()
         self.m1x_posterior = self.m1x_prior + INOV
 
         #self.state_process_posterior_0 = self.state_process_prior_0
-        self.m1x_prior_previous = self.m1x_prior
+        self.m1x_prior_previous = self.m1x_prior.detach().clone()
 
         # update y_prev
-        self.y_previous = y
+        self.y_previous = y.detach().clone()
 
         # return
         return self.m1x_posterior
@@ -602,7 +614,28 @@ class KalmanNetNN(torch.nn.Module):
         self.h_S = torch.zeros(self.seq_len_input,self.batch_size,self.n ** 2).to(self.device) # batch size expansion   
         self.h_Sigma = torch.zeros(self.seq_len_input,self.batch_size,self.m ** 2).to(self.device) # batch size expansion
         self.h_Q = torch.zeros(self.seq_len_input,self.batch_size,self.m ** 2).to(self.device) # batch size expansion
-
+        self.h_S = self.h_S.detach().clone() 
+        self.h_Sigma = self.h_Sigma.detach().clone()
+        self.h_Q = self.h_Q.detach().clone()
+        
+    ######################
+    ### Compute x post ###
+    ######################
+    def compute_x_post(self, state, obs, train_target_batch_spt, sysmdl_T, sysmdl_m, N_B, task_net):
+        temp_net = task_net
+        self.InitSequence(state, sysmdl_T)
+        temp_net.init_hidden()
+        x_out_training_batch_spt = torch.zeros([N_B, sysmdl_m, sysmdl_T]).to(self.device)
+        # Forward Computation
+        for t in range(0, sysmdl_T):
+            if self.use_context_mod:
+                x_out_training_batch_spt[:, :, t] = torch.squeeze(temp_net(torch.unsqueeze(obs[:, :, t],2), state))
+            else:
+                x_out_training_batch_spt[:, :, t] = torch.squeeze(temp_net(torch.unsqueeze(obs[:, :, t],2)))           
+        # Compute Training Loss                 
+        MSE_trainbatch_linear_LOSS_spt = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)
+        return MSE_trainbatch_linear_LOSS_spt
+        
     #####################
     ### Split weights ###
     #####################

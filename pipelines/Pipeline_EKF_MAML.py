@@ -285,7 +285,6 @@ class Pipeline_EKF_MAML:
     def MAML_train_second(self, SoW_train_range, SysModel, cv_input_tuple, cv_target_tuple, train_input_tuple, train_target_tuple, path_results,
                    cv_init, train_init, args, MaskOnState=False, train_lengthMask=None,cv_lengthMask=None):
 
-        task_num = len(SoW_train_range)
         self.MSE_cv_dB_opt = 1000
         self.MSE_cv_idx_opt = 0
         # Init MSE Loss
@@ -306,8 +305,286 @@ class Pipeline_EKF_MAML:
         
         for ti in range(0, self.N_steps):
             # torch.autograd.set_detect_anomaly(True)
+            task_num = len(SoW_train_range)
             count_num = task_num #initialized to task_num for each step
             meta_loss = torch.tensor(0., requires_grad=True, device=self.device) #initialized to 0 for each step
+            is_qry_nan = False
+            gradients = {}
+            for name, param in self.model.named_parameters():
+                if param.requires_grad:
+                    gradients[name] = torch.zeros_like(param)
+
+            #MSE_trainbatch_linear_LOSS_spt = torch.zeros([len(SoW_train_range)]) # inner loss for each task on support set
+            
+            for i in range(task_num):
+                
+                task_model = KNet_mnet().to(self.device) # = new theta_i'
+                task_model.NNBuild(SysModel[i], args)
+                task_model.load_state_dict(self.model.state_dict()) #base_net = original theta
+                #loading original theta to avoid using previous theta'
+                task_model.batch_size = self.N_B[i]
+                # Init Hidden State
+                task_model.init_hidden() #must initialize hidden state
+                inner_optimizer = torch.optim.Adam(task_model.weights.parameters(), lr=self.update_lr, weight_decay=self.weightDecay)
+                # Init Training Batch tensors
+                y_training_batch_spt = torch.zeros([self.N_B[i], sysmdl_n, sysmdl_T]).to(self.device)
+                train_target_batch_spt = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
+                x_out_training_batch_spt = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
+                y_training_batch_query = torch.zeros([self.N_B[i], sysmdl_n, sysmdl_T]).to(self.device)
+                train_target_batch_query = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
+                x_out_training_batch_query = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
+                # Init Sequence
+                train_init_batch_spt = torch.empty([self.N_B[i], sysmdl_m,1]).to(self.device)
+                train_init_batch_query = torch.empty([self.N_B[i], sysmdl_m,1]).to(self.device)  
+                # SoW: make sure SoWs are consistent
+                assert torch.allclose(cv_input_tuple[i][1], cv_target_tuple[i][1]) 
+                assert torch.allclose(train_input_tuple[i][1], train_target_tuple[i][1]) 
+                self.model.UpdateSystemDynamics(SysModel[i])
+                # req grad
+                train_input_tuple[i][1].requires_grad = True # SoW_train
+                train_input_tuple[i][0].requires_grad = True # input y
+                train_target_tuple[i][0].requires_grad = True # target x
+                train_init[i].requires_grad = True # init x0
+                # data size
+                N_E_spt = int(len(train_input_tuple[i][0]) * self.spt_percentage) # Number of Support Training Sequences
+                N_E_query = len(train_input_tuple[i][0])-N_E_spt # Number of Query Training Sequences
+                
+                # Randomly select N_B support training sequences
+                assert self.N_B[i] <= N_E_spt # N_B must be smaller than N_E
+                n_e_spt = random.sample(range(N_E_spt), k=self.N_B[i])
+                dataset_index = 0
+                for index in n_e_spt:
+                    # Training Batch
+                    if self.args.randomLength:
+                        y_training_batch_spt[dataset_index,:,train_lengthMask[i][index,:]] = train_input_tuple[i][0][index,:,train_lengthMask[index,:]]
+                        train_target_batch_spt[dataset_index,:,train_lengthMask[i][index,:]] = train_target_tuple[i][0][index,:,train_lengthMask[index,:]]
+                    else:
+                        y_training_batch_spt[dataset_index,:,:] = train_input_tuple[i][0][index]
+                        train_target_batch_spt[dataset_index,:,:] = train_target_tuple[i][0][index]                                 
+                    # Init Sequence
+                    train_init_batch_spt[dataset_index,:,0] = torch.squeeze(train_init[i][index])                  
+                    dataset_index += 1
+                
+                # Randomly select N_B query training sequences
+                assert self.N_B[i] <= N_E_query # N_B must be smaller than N_E
+                n_e_query = random.sample(range(N_E_spt, N_E_spt + N_E_query), k=self.N_B[i])
+                dataset_index = 0
+                for index in n_e_query:
+                    # Training Batch
+                    if self.args.randomLength:
+                        y_training_batch_query[dataset_index,:,train_lengthMask[i][index,:]] = train_input_tuple[i][0][index,:,train_lengthMask[index,:]]
+                        train_target_batch_query[dataset_index,:,train_lengthMask[i][index,:]] = train_target_tuple[i][0][index,:,train_lengthMask[index,:]]
+                    else:
+                        y_training_batch_query[dataset_index,:,:] = train_input_tuple[i][0][index]
+                        train_target_batch_query[dataset_index,:,:] = train_target_tuple[i][0][index]                                 
+                    # Init Sequence
+                    train_init_batch_query[dataset_index,:,0] = torch.squeeze(train_init[i][index])                  
+                    dataset_index += 1
+                
+                task_model.InitSequence(train_init_batch_spt, sysmdl_T)  
+                
+                ### check with Xiaoyong, should use train_init_batch_spt and not train_init_tuple
+                # Forward Computation
+                # for t in range(0, sysmdl_T):
+                #     if self.args.use_context_mod:
+                #         x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
+                #     else:
+                #         x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
+                    
+                # # Compute Training Loss
+                # # no composition loss, no mask                 
+                # MSE_trainbatch_linear_LOSS_spt = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
+                MSE_trainbatch_linear_LOSS_spt = self.model.compute_x_post(train_init_batch_spt, y_training_batch_spt, 
+                                                                           train_target_batch_spt, sysmdl_T, sysmdl_n, 
+                                                                           self.N_B[i], task_model)
+                if torch.isnan(MSE_trainbatch_linear_LOSS_spt).item():
+                    count_num -= 1
+                    continue
+
+                inner_optimizer.zero_grad()
+                MSE_trainbatch_linear_LOSS_spt.backward() #computes gradient of step 6
+                torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1) #clip on gradient to stabilize (clip the value)
+                inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
+                
+                for k in range(1, self.update_step):
+                    # Forward Computation
+                    # for t in range(0, sysmdl_T):
+                    #     if self.args.use_context_mod:
+                    #         x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
+                    #     else:
+                    #         x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
+                    
+                    # # Compute Training Loss
+                    # # no composition loss, no mask                 
+                    # loss = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
+                    loss = self.model.compute_x_post(train_init_batch_spt, y_training_batch_spt, 
+                                                     train_target_batch_spt, sysmdl_T, sysmdl_n, 
+                                                     self.N_B[i], task_model)
+                    if torch.isnan(loss).item():
+                        count_num -= 1
+                        continue
+                    
+                    inner_optimizer.zero_grad()
+                    loss.backward() #computes gradient of step 6
+                    torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1) #clip on gradient to stabilize (clip the value)
+                    inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
+
+                if is_qry_nan:
+                    is_qry_nan = False
+                    continue
+                
+                task_model.batch_size = self.N_B_query[i]
+                task_model.init_hidden() # task model has theta'
+                task_model.InitSequence(train_init_batch_query, sysmdl_T)
+                
+                #compute the loss with theta'
+                #MSE_trainbatch_linear_LOSS_query = torch.zeros([len(train_target_tuple)]) # inner loss for each task on query set   
+                # Forward Computation
+                # for t in range(0, sysmdl_T):
+                #     if self.args.use_context_mod:
+                #         x_out_training_batch_query[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_query[:, :, t],2), train_input_tuple[i][1]))
+                #     else:
+                #         x_out_training_batch_query[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_query[:, :, t],2)))
+                    
+                # # Compute Training Loss
+                # # no composition loss, no mask                 
+                # MSE_trainbatch_linear_LOSS_query = self.loss_fn_train(x_out_training_batch_query, train_target_batch_query)           
+                MSE_trainbatch_linear_LOSS_query = self.model.compute_x_post(train_init_batch_query, y_training_batch_query, 
+                                                                             train_target_batch_query, sysmdl_T, sysmdl_n, 
+                                                                             self.N_B_query[i], task_model)
+                if torch.isnan(MSE_trainbatch_linear_LOSS_query).item():
+                    count_num -= 1
+                    continue
+
+                meta_loss = meta_loss + MSE_trainbatch_linear_LOSS_query
+
+            if count_num == 0:
+                return 0, 0
+
+            meta_loss = meta_loss/task_num
+            meta_loss.backward() #equation 21 on paper, computes Gtb
+            self.MSE_train_linear_epoch[ti] = meta_loss
+            self.MSE_train_dB_epoch[ti] = 10 * torch.log10(self.MSE_train_linear_epoch[ti])
+            
+            for name, param in task_model.named_parameters():
+                if param.grad is not None:
+                    gradients[name] += param.grad.clone()
+            #zero out gradient of base net (theta)
+            for param in self.model.parameters():
+                if param.grad is not None:
+                    param.grad.zero_()
+
+            for name, param in self.model.named_parameters():
+                if name in gradients:
+                    param.grad = gradients[name].clone()
+
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
+            self.meta_optimizer.step() #computes equation 24
+            
+            #################################
+            ### Validation Sequence Batch ###
+            #################################
+            # Cross Validation Mode
+            self.model.eval()
+            # data size
+            self.N_CV = len(cv_input_tuple[i][0])
+            sysmdl_T_test = cv_input_tuple[i][0].shape[2] 
+            # loss for each dataset
+            MSE_cvbatch_linear_LOSS = torch.zeros([len(cv_target_tuple)])                     
+            # Update Batch Size
+            self.model.batch_size = self.N_CV 
+
+            with torch.no_grad():
+                for i in range(task_num): # dataset i 
+                    if self.args.randomLength:
+                        MSE_cv_linear_LOSS = torch.zeros([self.N_CV])
+                    # Init Output
+                    x_out_cv_batch = torch.empty([self.N_CV, sysmdl_m, sysmdl_T_test]).to(self.device)
+
+                    # Init Hidden State
+                    self.model.init_hidden()              
+                    
+                    # Init Sequence                    
+                    self.model.InitSequence(cv_init[i], sysmdl_T_test)                       
+                    
+                    for t in range(0, sysmdl_T_test):
+                        if self.args.use_context_mod:
+                            x_out_cv_batch[:, :, t] = torch.squeeze(self.model(torch.unsqueeze(cv_input_tuple[i][0][:, :, t],2), cv_input_tuple[i][1]))
+                        else:
+                            x_out_cv_batch[:, :, t] = torch.squeeze(self.model(torch.unsqueeze(cv_input_tuple[i][0][:, :, t],2)))
+                    
+                    if self.args.randomLength:
+                            for index in range(self.N_CV):
+                                MSE_cv_linear_LOSS[index] = self.loss_fn(x_out_cv_batch[index,:,cv_lengthMask[i][index]], cv_target_tuple[i][0][index,:,cv_lengthMask[index]])
+                            MSE_cvbatch_linear_LOSS[i] = torch.mean(MSE_cv_linear_LOSS)
+                    else:
+                            MSE_cvbatch_linear_LOSS[i] = self.loss_fn(x_out_cv_batch, cv_target_tuple[i][0])
+                            
+                # Print loss for each dataset in train range    
+                for i in SoW_train_range:
+                    MSE_cvbatch_dB_LOSS_i = 10 * math.log10(MSE_cvbatch_linear_LOSS[i].item())
+                    print(f"MSE Validation on dataset {i}:", MSE_cvbatch_dB_LOSS_i,"[dB]")
+                
+                # averaged dB Loss
+                MSE_cvbatch_linear_LOSS = MSE_cvbatch_linear_LOSS.sum() / len(SoW_train_range)
+                self.MSE_cv_linear_epoch[ti] = MSE_cvbatch_linear_LOSS.item()
+                self.MSE_cv_dB_epoch[ti] = 10 * torch.log10(self.MSE_cv_linear_epoch[ti])
+                # save model with best averaged loss on all datasets
+                if (self.MSE_cv_dB_epoch[ti] < self.MSE_cv_dB_opt):
+                    self.MSE_cv_dB_opt = self.MSE_cv_dB_epoch[ti]
+                    self.MSE_cv_idx_opt = ti
+                    
+                    torch.save(self.model.state_dict(), path_results + 'knet_best-model.pt')
+
+            ########################
+            ### Training Summary ###
+            ########################
+            print(ti, "MSE Training Average:", self.MSE_train_dB_epoch[ti], "[dB]", "MSE Validation :", self.MSE_cv_dB_epoch[ti],
+                "[dB]")
+                    
+            if (ti > 1):
+                d_train = self.MSE_train_dB_epoch[ti] - self.MSE_train_dB_epoch[ti - 1]
+                d_cv = self.MSE_cv_dB_epoch[ti] - self.MSE_cv_dB_epoch[ti - 1]
+                print("diff MSE Training :", d_train, "[dB]", "diff MSE Validation :", d_cv, "[dB]")
+
+            print("Optimal idx:", self.MSE_cv_idx_opt, "Optimal :", self.MSE_cv_dB_opt, "[dB]")
+            
+            ### Optinal: record loss on wandb
+            if self.args.wandb_switch:
+                wandb.log({
+                    "train_loss": self.MSE_train_dB_epoch[ti],
+                    "val_loss": self.MSE_cv_dB_epoch[ti]})
+                
+        return [self.MSE_cv_linear_epoch, self.MSE_cv_dB_epoch, self.MSE_train_linear_epoch, self.MSE_train_dB_epoch]
+    
+    def MAML_train_first(self, SoW_train_range, SysModel, cv_input_tuple, cv_target_tuple, train_input_tuple, train_target_tuple, path_results,
+                   cv_init, train_init, args, MaskOnState=False, train_lengthMask=None,cv_lengthMask=None):
+
+        self.MSE_cv_dB_opt = 1000
+        self.MSE_cv_idx_opt = 0
+        # Init MSE Loss
+        self.MSE_cv_linear_epoch = torch.zeros([self.N_steps])
+        self.MSE_cv_dB_epoch = torch.zeros([self.N_steps])
+        self.MSE_train_linear_epoch = torch.zeros([self.N_steps])
+        self.MSE_train_dB_epoch = torch.zeros([self.N_steps])
+        
+        # dataset size
+        for i in SoW_train_range[:-1]:# except the last one
+            assert(train_target_tuple[i][0].shape[1]==train_target_tuple[i+1][0].shape[1])
+            assert(train_input_tuple[i][0].shape[1]==train_input_tuple[i+1][0].shape[1])
+            assert(train_input_tuple[i][0].shape[2]==train_input_tuple[i+1][0].shape[2])
+            # check all datasets have the same m, n, T   
+        sysmdl_m = train_target_tuple[0][0].shape[1] # state x dimension
+        sysmdl_n = train_input_tuple[0][0].shape[1] # input y dimension
+        sysmdl_T = train_input_tuple[0][0].shape[2] # sequence length 
+        
+        for ti in range(0, self.N_steps):
+            # torch.autograd.set_detect_anomaly(True)
+            task_num = len(SoW_train_range)
+            count_num = task_num #initialized to task_num for each step
+            meta_loss = torch.tensor(0., requires_grad=True, device=self.device) #initialized to 0 for each step
+            loss_q = 0
+            losses = torch.tensor(0.).to(self.device)
             is_qry_nan = False
             gradients = {}
             for name, param in self.model.named_parameters():
@@ -401,8 +678,6 @@ class Pipeline_EKF_MAML:
                 MSE_trainbatch_linear_LOSS_spt.backward() #computes gradient of step 6
                 torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1) #clip on gradient to stabilize (clip the value)
                 inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
-
-                losses = torch.zeros(self.update_step)
                 
                 for k in range(1, self.update_step):
                     
@@ -415,13 +690,13 @@ class Pipeline_EKF_MAML:
                     
                     # Compute Training Loss
                     # no composition loss, no mask                 
-                    losses[k] = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
-                    if torch.isnan(losses[k]).item():
+                    loss = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
+                    if torch.isnan(loss).item():
                         count_num -= 1
                         continue
                     
                     inner_optimizer.zero_grad()
-                    losses[k].backward() #computes gradient of step 6
+                    loss.backward() #computes gradient of step 6
                     torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1) #clip on gradient to stabilize (clip the value)
                     inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
 
@@ -506,21 +781,6 @@ class Pipeline_EKF_MAML:
                         else:
                             x_out_cv_batch[:, :, t] = torch.squeeze(self.model(torch.unsqueeze(cv_input_tuple[i][0][:, :, t],2)))
                     
-                    # Compute CV Loss
-                    #if(MaskOnState):
-                        #if self.args.randomLength:
-                            #for index in range(self.N_CV):
-                                #MSE_cv_linear_LOSS[index] = self.loss_fn(x_out_cv_batch[index,mask,cv_lengthMask[i][index]], cv_target_tuple[i][0][index,mask,cv_lengthMask[index]])
-                        #MSE_cvbatch_linear_LOSS[i] = torch.mean(MSE_cv_linear_LOSS)
-                        #else:          
-                            #MSE_cvbatch_linear_LOSS[i] = self.loss_fn(x_out_cv_batch[:,mask,:], cv_target_tuple[i][0][:,mask,:])
-                    #else:
-                        #if self.args.randomLength:
-                            #for index in range(self.N_CV):
-                                #MSE_cv_linear_LOSS[index] = self.loss_fn(x_out_cv_batch[index,:,cv_lengthMask[i][index]], cv_target_tuple[i][0][index,:,cv_lengthMask[index]])
-                            #MSE_cvbatch_linear_LOSS[i] = torch.mean(MSE_cv_linear_LOSS)
-                        #else:
-                            #MSE_cvbatch_linear_LOSS[i] = self.loss_fn(x_out_cv_batch, cv_target_tuple[i][0])
                     if self.args.randomLength:
                             for index in range(self.N_CV):
                                 MSE_cv_linear_LOSS[index] = self.loss_fn(x_out_cv_batch[index,:,cv_lengthMask[i][index]], cv_target_tuple[i][0][index,:,cv_lengthMask[index]])
@@ -563,8 +823,8 @@ class Pipeline_EKF_MAML:
                     "train_loss": self.MSE_train_dB_epoch[ti],
                     "val_loss": self.MSE_cv_dB_epoch[ti]})
                 
-        return [self.MSE_cv_linear_epoch, self.MSE_cv_dB_epoch, self.MSE_train_linear_epoch, self.MSE_train_dB_epoch]
-        
+        return [self.MSE_cv_linear_epoch, self.MSE_cv_dB_epoch, self.MSE_train_linear_epoch, self.MSE_train_dB_epoch]  
+      
     def NNTest_alldatasets(self, SoW_test_range, sys_model, test_input_tuple, test_target_tuple, path_results,test_init,\
         MaskOnState=False,load_model=False,load_model_path=None, test_lengthMask=None):
         if self.args.wandb_switch: 
