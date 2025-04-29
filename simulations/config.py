@@ -73,6 +73,8 @@ def general_settings():
                         help='spt_percentage for MAML (default: 0.3)')
     parser.add_argument('--update_step', type=int, default=5, metavar='Update_step',
                         help='update steps for MAML (default: 5)')
+    parser.add_argument('--maml_wd', type=list, default=[0.3, 0.3, 0.2, 0.1, 0.1, 0.01], metavar='Maml_Weight_Decay',
+                        help='weight decay for MAML')
     
     parser.add_argument('--grid_size_dB', type=float, default=1, metavar='grid_size_dB',
                         help='input grid size for grid search of SoW in dB')
