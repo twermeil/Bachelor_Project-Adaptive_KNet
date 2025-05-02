@@ -413,8 +413,8 @@ class KalmanNetNN(torch.nn.Module):
         INOV = torch.bmm(self.KGain, self.dy)
         self.training_first = False
         self.m1x_posterior_previous = self.m1x_posterior.detach().clone()
-        self.m1x_posterior = (self.m1x_prior + INOV).detach().clone()
-
+        x_post = self.m1x_prior + INOV
+        self.m1x_posterior = x_post.detach().clone()
         #self.state_process_posterior_0 = self.state_process_prior_0
         self.m1x_prior_previous = self.m1x_prior.detach().clone()
 
