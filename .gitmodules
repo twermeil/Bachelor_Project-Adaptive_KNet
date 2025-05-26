@@ -1,0 +1,3 @@
+[submodule "MAML_KALMANNET/MAML-KalmanNet"]
+	path = MAML_KALMANNET/MAML-KalmanNet
+	url = https://github.com/ShanLi-2000/MAML-KalmanNet.git

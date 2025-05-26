@@ -51,7 +51,6 @@ class Pipeline_EKF_MAML:
         # MSE LOSS Function
         self.loss_fn = nn.MSELoss(reduction='mean') # Loss Function for single dataset and CV
         # Loss Function for multiple datasets
-
         self.loss_fn_train = nn.MSELoss(reduction='mean')
             
         self.update_lr = args.update_lr  # 0.4 = alpha
@@ -60,12 +59,13 @@ class Pipeline_EKF_MAML:
         self.spt_percentage = args.spt_percentage # 0.3
         self.update_step = args.update_step # 5
         #self.model = KNet_mnet().to(self.device)
-
+        self.maml_weight_decay = args.maml_wd
         # Use the optim package to define an Optimizer that will update the weights of
         # the model for us. Here we will use Adam; the optim package contains many other
         # optimization algoriths. The first argument to the Adam constructor tells the
         # optimizer which Tensors it should update.
         self.meta_optimizer = torch.optim.Adam(self.model.weights.parameters(), lr=self.meta_lr, weight_decay=self.weightDecay)
+        self.use_weight = True
         
     def NNTrain_mixdatasets(self, SoW_train_range, SysModel, cv_input_tuple, cv_target_tuple, train_input_tuple, train_target_tuple, path_results, \
         cv_init, train_init, MaskOnState=False, train_lengthMask=None,cv_lengthMask=None):
@@ -282,6 +282,8 @@ class Pipeline_EKF_MAML:
             ###
         return [self.MSE_cv_linear_epoch, self.MSE_cv_dB_epoch, self.MSE_train_linear_epoch, self.MSE_train_dB_epoch]
     
+    #def MAML_train(self, args):
+        
     def MAML_train_second(self, SoW_train_range, SysModel, cv_input_tuple, cv_target_tuple, train_input_tuple, train_target_tuple, path_results,
                    cv_init, train_init, args, MaskOnState=False, train_lengthMask=None,cv_lengthMask=None):
 
@@ -314,7 +316,6 @@ class Pipeline_EKF_MAML:
                 if param.requires_grad:
                     gradients[name] = torch.zeros_like(param)
 
-            #MSE_trainbatch_linear_LOSS_spt = torch.zeros([len(SoW_train_range)]) # inner loss for each task on support set
             
             for i in range(task_num):
                 
@@ -326,13 +327,12 @@ class Pipeline_EKF_MAML:
                 # Init Hidden State
                 task_model.init_hidden() #must initialize hidden state
                 inner_optimizer = torch.optim.Adam(task_model.weights.parameters(), lr=self.update_lr, weight_decay=self.weightDecay)
+                
                 # Init Training Batch tensors
                 y_training_batch_spt = torch.zeros([self.N_B[i], sysmdl_n, sysmdl_T]).to(self.device)
                 train_target_batch_spt = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
-                x_out_training_batch_spt = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
                 y_training_batch_query = torch.zeros([self.N_B[i], sysmdl_n, sysmdl_T]).to(self.device)
                 train_target_batch_query = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
-                x_out_training_batch_query = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
                 # Init Sequence
                 train_init_batch_spt = torch.empty([self.N_B[i], sysmdl_m,1]).to(self.device)
                 train_init_batch_query = torch.empty([self.N_B[i], sysmdl_m,1]).to(self.device)  
@@ -381,19 +381,6 @@ class Pipeline_EKF_MAML:
                     train_init_batch_query[dataset_index,:,0] = torch.squeeze(train_init[i][index])                  
                     dataset_index += 1
                 
-                task_model.InitSequence(train_init_batch_spt, sysmdl_T)  
-                
-                ### check with Xiaoyong, should use train_init_batch_spt and not train_init_tuple
-                # Forward Computation
-                # for t in range(0, sysmdl_T):
-                #     if self.args.use_context_mod:
-                #         x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
-                #     else:
-                #         x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
-                    
-                # # Compute Training Loss
-                # # no composition loss, no mask                 
-                # MSE_trainbatch_linear_LOSS_spt = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
                 MSE_trainbatch_linear_LOSS_spt = self.model.compute_x_post(train_init_batch_spt, y_training_batch_spt, 
                                                                            train_target_batch_spt, sysmdl_T, sysmdl_n, 
                                                                            self.N_B[i], task_model)
@@ -407,22 +394,13 @@ class Pipeline_EKF_MAML:
                 inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
                 
                 for k in range(1, self.update_step):
-                    # Forward Computation
-                    # for t in range(0, sysmdl_T):
-                    #     if self.args.use_context_mod:
-                    #         x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
-                    #     else:
-                    #         x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
-                    
-                    # # Compute Training Loss
-                    # # no composition loss, no mask                 
-                    # loss = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
                     loss = self.model.compute_x_post(train_init_batch_spt, y_training_batch_spt, 
                                                      train_target_batch_spt, sysmdl_T, sysmdl_n, 
                                                      self.N_B[i], task_model)
                     if torch.isnan(loss).item():
                         count_num -= 1
-                        continue
+                        is_qry_nan = True
+                        break
                     
                     inner_optimizer.zero_grad()
                     loss.backward() #computes gradient of step 6
@@ -437,29 +415,14 @@ class Pipeline_EKF_MAML:
                 task_model.init_hidden() # task model has theta'
                 task_model.InitSequence(train_init_batch_query, sysmdl_T)
                 
-                #compute the loss with theta'
-                #MSE_trainbatch_linear_LOSS_query = torch.zeros([len(train_target_tuple)]) # inner loss for each task on query set   
-                # Forward Computation
-                # for t in range(0, sysmdl_T):
-                #     if self.args.use_context_mod:
-                #         x_out_training_batch_query[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_query[:, :, t],2), train_input_tuple[i][1]))
-                #     else:
-                #         x_out_training_batch_query[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_query[:, :, t],2)))
-                    
-                # # Compute Training Loss
-                # # no composition loss, no mask                 
-                # MSE_trainbatch_linear_LOSS_query = self.loss_fn_train(x_out_training_batch_query, train_target_batch_query)           
                 MSE_trainbatch_linear_LOSS_query = self.model.compute_x_post(train_init_batch_query, y_training_batch_query, 
                                                                              train_target_batch_query, sysmdl_T, sysmdl_n, 
                                                                              self.N_B_query[i], task_model)
-                if torch.isnan(MSE_trainbatch_linear_LOSS_query).item():
-                    count_num -= 1
-                    continue
 
                 meta_loss = meta_loss + MSE_trainbatch_linear_LOSS_query
 
             if count_num == 0:
-                return 0, 0
+                meta_loss = 0
 
             meta_loss = meta_loss/task_num
             meta_loss.backward() #equation 21 on paper, computes Gtb
@@ -582,17 +545,15 @@ class Pipeline_EKF_MAML:
             # torch.autograd.set_detect_anomaly(True)
             task_num = len(SoW_train_range)
             count_num = task_num #initialized to task_num for each step
-            meta_loss = torch.tensor(0., requires_grad=True, device=self.device) #initialized to 0 for each step
-            loss_q = 0
             losses = torch.tensor(0.).to(self.device)
-            is_qry_nan = False
             gradients = {}
+            temp_gradients = {}
+            loss_q = 0
             for name, param in self.model.named_parameters():
                 if param.requires_grad:
                     gradients[name] = torch.zeros_like(param)
-
-            #MSE_trainbatch_linear_LOSS_spt = torch.zeros([len(SoW_train_range)]) # inner loss for each task on support set
-            
+                    temp_gradients[name] = torch.zeros_like(param)
+                    
             for i in range(task_num):
                 
                 task_model = KNet_mnet().to(self.device) # = new theta_i'
@@ -603,13 +564,12 @@ class Pipeline_EKF_MAML:
                 # Init Hidden State
                 task_model.init_hidden() #must initialize hidden state
                 inner_optimizer = torch.optim.Adam(task_model.weights.parameters(), lr=self.update_lr, weight_decay=self.weightDecay)
+                
                 # Init Training Batch tensors
                 y_training_batch_spt = torch.zeros([self.N_B[i], sysmdl_n, sysmdl_T]).to(self.device)
                 train_target_batch_spt = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
-                x_out_training_batch_spt = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
                 y_training_batch_query = torch.zeros([self.N_B[i], sysmdl_n, sysmdl_T]).to(self.device)
                 train_target_batch_query = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
-                x_out_training_batch_query = torch.zeros([self.N_B[i], sysmdl_m, sysmdl_T]).to(self.device)
                 # Init Sequence
                 train_init_batch_spt = torch.empty([self.N_B[i], sysmdl_m,1]).to(self.device)
                 train_init_batch_query = torch.empty([self.N_B[i], sysmdl_m,1]).to(self.device)  
@@ -658,96 +618,74 @@ class Pipeline_EKF_MAML:
                     train_init_batch_query[dataset_index,:,0] = torch.squeeze(train_init[i][index])                  
                     dataset_index += 1
                 
-                task_model.InitSequence(train_init_batch_spt, sysmdl_T)  
-                 
-                # Forward Computation
-                for t in range(0, sysmdl_T):
-                    if self.args.use_context_mod:
-                        x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
-                    else:
-                        x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
-                    
-                # Compute Training Loss
-                # no composition loss, no mask                 
-                MSE_trainbatch_linear_LOSS_spt = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
-                if torch.isnan(MSE_trainbatch_linear_LOSS_spt).item():
+                loss = self.model.compute_x_post(train_init_batch_spt, y_training_batch_spt, 
+                                                                           train_target_batch_spt, sysmdl_T, sysmdl_n, 
+                                                                           self.N_B[i], task_model)
+                if torch.isnan(loss).item():
                     count_num -= 1
                     continue
 
                 inner_optimizer.zero_grad()
-                MSE_trainbatch_linear_LOSS_spt.backward() #computes gradient of step 6
+                loss.backward() #computes gradient of step 6
                 torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1) #clip on gradient to stabilize (clip the value)
                 inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
                 
                 for k in range(1, self.update_step):
-                    
-                    # Forward Computation
-                    for t in range(0, sysmdl_T):
-                        if self.args.use_context_mod:
-                            x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2), train_input_tuple[i][1]))
-                        else:
-                            x_out_training_batch_spt[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_spt[:, :, t],2)))
-                    
-                    # Compute Training Loss
-                    # no composition loss, no mask                 
-                    loss = self.loss_fn_train(x_out_training_batch_spt, train_target_batch_spt)           
-                    if torch.isnan(loss).item():
+                    loss = self.model.compute_x_post(train_init_batch_spt, y_training_batch_spt, 
+                                                     train_target_batch_spt, sysmdl_T, sysmdl_n, 
+                                                     self.N_B[i], task_model)
+                    if math.isnan(loss) or math.isnan(loss_q):
                         count_num -= 1
-                        continue
+                        break
                     
                     inner_optimizer.zero_grad()
                     loss.backward() #computes gradient of step 6
                     torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1) #clip on gradient to stabilize (clip the value)
                     inner_optimizer.step() #model update (theta-graident) (theta_i' -> task_model)
 
-                if is_qry_nan:
-                    is_qry_nan = False
-                    continue
-                
-                task_model.batch_size = self.N_B_query[i]
-                task_model.init_hidden() # task model has theta'
-                task_model.InitSequence(train_init_batch_query, sysmdl_T)
-                
-                #compute the loss with theta'
-                #MSE_trainbatch_linear_LOSS_query = torch.zeros([len(train_target_tuple)]) # inner loss for each task on query set   
-                # Forward Computation
-                for t in range(0, sysmdl_T):
-                    if self.args.use_context_mod:
-                        x_out_training_batch_query[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_query[:, :, t],2), train_input_tuple[i][1]))
-                    else:
-                        x_out_training_batch_query[:, :, t] = torch.squeeze(task_model(torch.unsqueeze(y_training_batch_query[:, :, t],2)))
+                    loss_q = self.model.compute_x_post(train_init_batch_query, y_training_batch_query,
+                                                       train_init_batch_query, sysmdl_T, sysmdl_n,
+                                                       self.N_B_query[i], task_model)
+                    loss_q.backward()
+                    torch.nn.utils.clip_grad_norm_(task_model.parameters(), 1)
                     
-                # Compute Training Loss
-                # no composition loss, no mask                 
-                MSE_trainbatch_linear_LOSS_query = self.loss_fn_train(x_out_training_batch_query, train_target_batch_query)           
-                if torch.isnan(MSE_trainbatch_linear_LOSS_query).item():
-                    count_num -= 1
+                    for name, param in task_model.named_parameters():
+                        if param.grad is not None:
+                            temp_gradients[name] += param.grad.clone() * self.maml_weight_decay[k-1]
+                            # if self.use_weight:
+                            #     temp_gradients[name] += param.grad.clone() * self.maml_weight_decay[k-1] * weights[i]
+                            # else:
+                            #     temp_gradients[name] += param.grad.clone() * self.maml_weight_decay[k-1]
+                
+                if math.isnan(loss) or math.isnan(loss_q):
+                    for name, param in task_model.named_parameters():
+                        if param.grad is not None:
+                            temp_gradients[name] = torch.zeros_like(param)
                     continue
-
-                meta_loss = meta_loss + MSE_trainbatch_linear_LOSS_query
+                else:
+                    for name, param in task_model.named_parameters():
+                        if param.grad is not None:
+                            gradients[name] += temp_gradients[name].clone()
+                            temp_gradients[name] = torch.zeros_like(param)    
+                    
+                losses += loss_q.clone()
 
             if count_num == 0:
-                return 0, 0
-
-            meta_loss = meta_loss/task_num
-            meta_loss.backward() #equation 21 on paper, computes Gtb
-            self.MSE_train_linear_epoch[ti] = meta_loss
+                losses = 0
+            
+            self.MSE_train_linear_epoch[ti] = losses/count_num
             self.MSE_train_dB_epoch[ti] = 10 * torch.log10(self.MSE_train_linear_epoch[ti])
             
-            for name, param in task_model.named_parameters():
-                if param.grad is not None:
-                    gradients[name] += param.grad.clone()
-            #zero out gradient of base net (theta)
-            for param in self.model.parameters():
+            for param in self.base_net.parameters():
                 if param.grad is not None:
                     param.grad.zero_()
 
-            for name, param in self.model.named_parameters():
+            for name, param in self.base_net.named_parameters():
                 if name in gradients:
-                    param.grad = gradients[name].clone()
+                    param.grad = gradients[name] / count_num
 
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 1)
-            self.meta_optimizer.step() #computes equation 24
+            torch.nn.utils.clip_grad_norm_(self.base_net.parameters(), 1)
+            self.meta_optim.step()
             
             #################################
             ### Validation Sequence Batch ###
@@ -823,8 +761,8 @@ class Pipeline_EKF_MAML:
                     "train_loss": self.MSE_train_dB_epoch[ti],
                     "val_loss": self.MSE_cv_dB_epoch[ti]})
                 
-        return [self.MSE_cv_linear_epoch, self.MSE_cv_dB_epoch, self.MSE_train_linear_epoch, self.MSE_train_dB_epoch]  
-      
+        return [self.MSE_cv_linear_epoch, self.MSE_cv_dB_epoch, self.MSE_train_linear_epoch, self.MSE_train_dB_epoch]
+         
     def NNTest_alldatasets(self, SoW_test_range, sys_model, test_input_tuple, test_target_tuple, path_results,test_init,\
         MaskOnState=False,load_model=False,load_model_path=None, test_lengthMask=None):
         if self.args.wandb_switch: 

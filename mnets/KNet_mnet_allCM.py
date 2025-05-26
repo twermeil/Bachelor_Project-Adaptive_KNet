@@ -4,6 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
+import copy
 
 class KalmanNetNN(torch.nn.Module):
 
@@ -373,8 +374,9 @@ class KalmanNetNN(torch.nn.Module):
         obs_diff = torch.squeeze(y,2) - torch.squeeze(self.y_previous,2) 
         obs_innov_diff = torch.squeeze(y,2) - torch.squeeze(self.m1y,2)
         # both in size [batch_size, m]
-        fw_evol_diff = torch.squeeze(self.m1x_posterior,2) - torch.squeeze(self.m1x_posterior_previous,2)
-        fw_update_diff = torch.squeeze(self.m1x_posterior,2) - torch.squeeze(self.m1x_prior_previous,2)
+        posterior_detached = self.m1x_posterior.detach().clone()
+        fw_evol_diff = torch.squeeze(posterior_detached,2) - torch.squeeze(self.m1x_posterior_previous,2)
+        fw_update_diff = torch.squeeze(posterior_detached,2) - torch.squeeze(self.m1x_prior_previous,2)
 
         obs_diff = F.normalize(obs_diff, p=2, dim=1, eps=1e-12, out=None)
         obs_innov_diff = F.normalize(obs_innov_diff, p=2, dim=1, eps=1e-12, out=None)
@@ -412,8 +414,8 @@ class KalmanNetNN(torch.nn.Module):
         INOV = torch.bmm(self.KGain, self.dy)
         self.training_first = False
         self.m1x_posterior_previous = self.m1x_posterior.detach().clone()
-        self.m1x_posterior = self.m1x_prior + INOV
-
+        x_post = self.m1x_prior + INOV
+        self.m1x_posterior = x_post.detach().clone()
         #self.state_process_posterior_0 = self.state_process_prior_0
         self.m1x_prior_previous = self.m1x_prior.detach().clone()
 
@@ -622,8 +624,8 @@ class KalmanNetNN(torch.nn.Module):
     ### Compute x post ###
     ######################
     def compute_x_post(self, state, obs, train_target_batch_spt, sysmdl_T, sysmdl_m, N_B, task_net):
-        temp_net = task_net
-        self.InitSequence(state, sysmdl_T)
+        temp_net = copy.deepcopy(task_net)
+        temp_net.InitSequence(state, sysmdl_T)
         temp_net.init_hidden()
         x_out_training_batch_spt = torch.zeros([N_B, sysmdl_m, sysmdl_T]).to(self.device)
         # Forward Computation

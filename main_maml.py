@@ -97,6 +97,7 @@ args.update_lr = 1e-3 #0.4
 args.meta_lr = 1e-3 #0.001
 args.spt_percentage = 0.3
 args.update_step = 5
+args.maml_wd = [0.3, 0.3, 0.2, 0.1, 0.1, 0.01]
 
 # training parameters for Hypernet
 args.hnet_arch = "GRU" # "deconv" or "GRU
@@ -200,7 +201,7 @@ for i in range(len(SoW)):
 print(f"KalmanNet pipeline start")
 for i in range(len(SoW)):
     KalmanNet_model = KNet_mnet()
-    KalmanNet_model.NNBuild(sys_model[i], args)
+    KalmanNet_model.NNBuild(sys_model[0], args)
     print("Number of trainable parameters for KalmanNet on dataset ", i," : ",sum(p.numel() for p in KalmanNet_model.parameters() if p.requires_grad))
 
 ## Train Neural Network

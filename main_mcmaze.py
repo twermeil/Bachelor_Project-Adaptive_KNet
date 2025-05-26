@@ -1,0 +1,214 @@
+from nlb_tools.nwb_interface import NWBDataset
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.decomposition import PCA
+
+import torch
+import torch.nn as nn
+from datetime import datetime
+
+from simulations.Linear_sysmdl import SystemModel
+from simulations.utils import SplitData
+import simulations.config as config
+from simulations.linear_canonical.parameters import F, Q_structure, R_structure, Q_structure_nonid, R_structure_nonid,\
+   m, m1_0
+
+from filters.KalmanFilter_test import KFTest
+
+from hnets.hnet import HyperNetwork
+from hnets.hnet_deconv import hnet_deconv
+from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
+
+from pipelines.Pipeline_cm import Pipeline_cm
+from pipelines.Pipeline_EKF_MAML import Pipeline_EKF_MAML
+
+print("Pipeline Start")
+
+################
+### Get Time ###
+################
+today = datetime.today()
+now = datetime.now()
+strToday = today.strftime("%m.%d.%y")
+strNow = now.strftime("%H:%M:%S")
+strTime = strToday + "_" + strNow
+print("Current Time =", strTime)
+
+#########################
+### Parameter Setting ###
+#########################
+args = config.general_settings()
+args.use_cuda = False # use GPU or not
+if args.use_cuda:
+   if torch.cuda.is_available():
+      device = torch.device('cuda')
+      print("Using GPU")
+      torch.set_default_tensor_type(torch.cuda.FloatTensor)
+   else:
+      raise Exception("No GPU found, please set args.use_cuda = False")
+else:
+    device = torch.device('cpu')
+    print("Using CPU")
+
+### dataset parameters ##################################################
+# determine noise distribution normal/exp (DEFAULT: "normal (=Gaussian)")
+args.proc_noise_distri = "normal"
+args.meas_noise_distri = "normal"
+
+args.mixed_dataset = True #to use batch size list
+
+args.N_E = 1000 #training dataset size
+args.N_CV = 100 #cross validation
+args.N_T = 200 #testing dataset size
+args.per_cv = 0.2 #cross validation percentage
+args.per_test = 0.2 #testing percentage
+args.per_train = 0.6 #training percentage
+args.k_pca = 30
+# sequence length
+args.T = 100
+args.T_test = 100
+train_lengthMask = None
+cv_lengthMask = None
+test_lengthMask = None
+
+### training parameters ##################################################
+args.wandb_switch = False
+if args.wandb_switch:
+   import wandb
+   wandb.init(project="HKNet_Linear")
+args.knet_trainable = True
+
+# training parameters for KNet
+args.in_mult_KNet = 40
+args.out_mult_KNet = 40
+args.n_steps = 50000
+#already tuned parameters
+args.n_batch = 32
+args.update_lr = 1e-3 #0.4
+args.meta_lr = 1e-3 #0.001
+args.spt_percentage = 0.3
+args.update_step = 5
+args.maml_wd = [0.3, 0.3, 0.2, 0.1, 0.1, 0.01]
+
+### paths ##################################################
+path_results = 'simulations/maml/results/2x2/normal/'
+
+###############################
+### Data Loader (SplitData) ###
+###############################
+
+#dataloading
+dataset1 = NWBDataset("data/MC_maze/", "*train", split_heldout=False)
+dataset1.load()
+dataset2 = NWBDataset("data/MC_RTT/", "*train", split_heldout=False)
+dataset2.load()
+dataset3 = NWBDataset("data/Area2_BUMP/", "*train", split_heldout=False)
+dataset3.load()
+
+hp_mcmaze = dataset1.data['hand_pos']
+vel_mcmaze = dataset1.data['hand_vel'] 
+target_1 = np.concatenate([hp_mcmaze, vel_mcmaze], axis=1)  # shape (N, 4)
+spikes1 = dataset1.data['spikes']
+
+fp_mcrtt = dataset2.data['finger_pos'][:, :2]
+vel_mcrtt = dataset2.data['finger_vel']
+target_2 = np.concatenate([fp_mcrtt, vel_mcrtt], axis=1)  # shape (N, 4)
+spikes2 = dataset2.data['spikes']
+
+hp_a2b = dataset3.data['hand_pos']
+vel_a2b = dataset3.data['hand_vel']
+target_3 = np.concatenate([hp_a2b, vel_a2b], axis=1)  # shape (N, 4)
+spikes3 = dataset3.data['spikes']
+
+#apply pca so all have same dimension 
+k = args.k_pca  #pca dimensions --> tune in args
+pca1 = PCA(n_components=k)
+spikes_pca1 = pca1.fit_transform(spikes1)
+pca2 = PCA(n_components=k)
+spikes_pca2 = pca2.fit_transform(spikes2)
+pca3 = PCA(n_components=k)
+spikes_pca3 = pca3.fit_transform(spikes3)
+
+target1 = torch.from_numpy(target_1).float().to(device)
+spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
+
+target2 = torch.from_numpy(target_2).float().to(device)
+spikespca2 = torch.from_numpy(spikes_pca2).float().to(device)
+
+target3 = torch.from_numpy(target_3).float().to(device)
+spikespca3 = torch.from_numpy(spikes_pca3).float().to(device)
+
+input_list = [spikespca1, spikespca2, spikespca3]
+target_list = [target1, target2, target3]
+
+train_input_list = []
+train_target_list = []
+cv_input_list = []
+cv_target_list = []
+test_input_list = []
+test_target_list = []
+train_init_list = []
+cv_init_list = []
+test_init_list = []
+
+for i in range(len(input_list)):
+   train_input, train_target, train_init, cv_input, cv_target, cv_init, test_input, test_target, test_init = SplitData(args, input_list[i], target_list[i])
+   train_input_list.append(train_input) #input = y
+   train_target_list.append(train_target) #target = x
+   cv_input_list.append(cv_input)
+   cv_target_list.append(cv_target)
+   test_input_list.append(test_input)
+   test_target_list.append(test_target)
+   train_init_list.append(train_init)
+   cv_init_list.append(cv_init)
+   test_init_list.append(test_init) # = x0
+
+#############
+### Model ###
+#############
+F = F.to(device)
+n = spikespca1.shape[1]
+m = target1.shape[1]
+m1_0 = torch.zeros(m, 1)
+m1_0 = m1_0.to(device)
+# deterministic initial condition
+m2_0 = 0 * torch.eye(m)
+m1_0 = m1_0.to(device) 
+## estimate H using linear regression:
+target_all = torch.cat([target1, target2, target3], dim=0)
+spikes_all = torch.cat([spikespca1, spikespca2, spikespca3], dim=0)
+Y = target_all  # (N, 4)
+X = spikes_all  # (N, 30)
+H_est = torch.linalg.lstsq(X, Y).solution.T  # Shape (4, 30)
+H_est = H_est.to(device)
+
+## Q and R structure
+Q_structure = torch.eye(m)
+R_stucture = torch.eye(n)
+
+## artficial q2 and r2 for sysmodel with real data
+q2 = 1
+r2 = 1
+sys_model = []
+sys_model = SystemModel(F, q2*Q_structure, H_est, r2*R_structure, args.T, args.T_test, q2, r2)
+sys_model.InitSequence(m1_0, m2_0)
+SoW_train_range = list(range(len(input_list)))
+
+## Train Neural Network
+KalmanNet_model = KNet_mnet()
+KalmanNet_model.NNBuild(sys_model[0], args)
+KalmanNet_Pipeline = Pipeline_EKF_MAML(strTime, "KNet", "KalmanNet")
+#KalmanNet_Pipeline.setssModel(sys_model[i]) #don't use it in MAML_train
+KalmanNet_Pipeline.setModel(KalmanNet_model)
+KalmanNet_Pipeline.setTrainingParams(args)
+KalmanNet_Pipeline.NNTrain_alldatasets(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results, 
+                              cv_init_list, train_init_list, args)
+
+#for i in range(len(SoW)):
+   #print(f"Dataset {i}") 
+   #KalmanNet_Pipeline.NNTest_alldatasets(sys_model, test_input_list[i][0], test_target_list[i][0], path_results)
+
+## Close wandb run
+if args.wandb_switch: 
+   wandb.finish() 

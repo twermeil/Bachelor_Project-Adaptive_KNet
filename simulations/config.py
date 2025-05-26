@@ -16,6 +16,15 @@ def general_settings():
                         help='input sequence length')
     parser.add_argument('--T_test', type=int, default=100, metavar='test-length',
                         help='input test sequence length')
+    parser.add_argument('--k_pca', type=int, default=20, metavar='pca-dimension',
+                        help='dimension for PCA')
+    parser.add_argument('--per_cv', type=int, default=0.15, metavar='cross-validation-percentage',
+                        help='percentage of data used for cv')
+    parser.add_argument('--per_test', type=int, default=0.15, metavar='test-percentage',
+                        help='percentage of data used for testing')
+    parser.add_argument('--per_train', type=int, default=0.7, metavar='train-percentage',
+                        help='percentage of data used for training')
+    
         # Random length
     parser.add_argument('--randomLength', type=bool, default=False, metavar='rl',
                     help='if True, random sequence length')
@@ -73,6 +82,8 @@ def general_settings():
                         help='spt_percentage for MAML (default: 0.3)')
     parser.add_argument('--update_step', type=int, default=5, metavar='Update_step',
                         help='update steps for MAML (default: 5)')
+    parser.add_argument('--maml_wd', type=list, default=[0.3, 0.3, 0.2, 0.1, 0.1, 0.01], metavar='Maml_Weight_Decay',
+                        help='weight decay for MAML')
     
     parser.add_argument('--grid_size_dB', type=float, default=1, metavar='grid_size_dB',
                         help='input grid size for grid search of SoW in dB')
