@@ -7,10 +7,12 @@ from sklearn.decomposition import PCA
 import numpy as np
 from pynwb import NWBHDF5IO
 import os
-import glob
-from neural_latents.datasets.mc_rtt import load_dataset as load_mc_rtt
-from neural_latents.datasets.area2_bump import load_dataset as load_area2_bump
-from neural_latents.datasets.mc_maze import load_dataset
+import h5py
+import urllib.request
+
+from datasets.mc_rtt import load_dataset as load_mc_rtt
+from datasets.mc_maze import load_dataset as load_mc_maze
+from datasets.area2_bump import load_dataset as load_area2_bump
 
 def DataGen(args, SysModel_data, fileName):
 
@@ -97,38 +99,77 @@ def SplitData(args, spikes, target):
             spikes_val, target_val, val_init,
             spikes_test, target_test, test_init)
     
-#def load_nwb_file(path):
-    io = NWBHDF5IO(path, mode='r')
-    nwbfile = io.read()
-    return nwbfile, io  # keep io open during access
+# def load_nwb_file(path):
+#     io = NWBHDF5IO(path, mode='r')
+#     nwbfile = io.read()
+#     return nwbfile, io  # keep io open during access
 
-#def extract_dataset(base_path, file_pattern, k_pca):
-    files = sorted(glob.glob(os.path.join(base_path, file_pattern)))
-    assert len(files) > 0, f"No NWB files matched {file_pattern} in {base_path}"
+# def extract_dataset(base_path, file_pattern, k_pca):
+#     files = sorted(glob.glob(os.path.join(base_path, file_pattern)))
+#     assert len(files) > 0, f"No NWB files matched {file_pattern} in {base_path}"
     
-    nwbfile, io = load_nwb_file(files[0])  # Use the first matching file
+#     nwbfile, io = load_nwb_file(files[0])  # Use the first matching file
     
-    # Spike data (assumes binned units in a 2D array)
-    spikes = np.array(nwbfile.processing['brain_observatory'].data_interfaces['binned_spikes'].data)
+#     # Spike data (assumes binned units in a 2D array)
+#     spikes = np.array(nwbfile.processing['brain_observatory'].data_interfaces['binned_spikes'].data)
 
-    # Hand/finger position + velocity — adapt field names if needed
-    if 'hand_pos' in nwbfile.acquisition:
-        hand_pos = np.array(nwbfile.acquisition['hand_pos'].data)
-        hand_vel = np.array(nwbfile.acquisition['hand_vel'].data)
-        target = np.concatenate([hand_pos, hand_vel], axis=1)
-    elif 'finger_pos' in nwbfile.acquisition:
-        finger_pos = np.array(nwbfile.acquisition['finger_pos'].data)[:, :2]
-        finger_vel = np.array(nwbfile.acquisition['finger_vel'].data)
-        target = np.concatenate([finger_pos, finger_vel], axis=1)
-    else:
-        raise ValueError("Unknown target data type in acquisition")
+#     # Hand/finger position + velocity — adapt field names if needed
+#     if 'hand_pos' in nwbfile.acquisition:
+#         hand_pos = np.array(nwbfile.acquisition['hand_pos'].data)
+#         hand_vel = np.array(nwbfile.acquisition['hand_vel'].data)
+#         target = np.concatenate([hand_pos, hand_vel], axis=1)
+#     elif 'finger_pos' in nwbfile.acquisition:
+#         finger_pos = np.array(nwbfile.acquisition['finger_pos'].data)[:, :2]
+#         finger_vel = np.array(nwbfile.acquisition['finger_vel'].data)
+#         target = np.concatenate([finger_pos, finger_vel], axis=1)
+#     else:
+#         raise ValueError("Unknown target data type in acquisition")
 
-    # PCA on spikes
-    pca = PCA(n_components=k_pca)
-    spikes_pca = pca.fit_transform(spikes)
+#     # PCA on spikes
+#     pca = PCA(n_components=k_pca)
+#     spikes_pca = pca.fit_transform(spikes)
 
-    io.close()
-    return spikes_pca, target
+#     io.close()
+#     return spikes_pca, target
+
+def load_mc_maze_train():
+    url = 'https://osf.io/download/ugm47'
+    filename = 'mc_maze_train.h5'
+    if not os.path.exists(filename):
+        print(f"Downloading {filename}...")
+        urllib.request.urlretrieve(url, filename)
+    with h5py.File(filename, 'r') as f:
+        return {
+            'spikes': f['spikes'][:],
+            'hand_pos': f['hand_pos'][:],
+            'hand_vel': f['hand_vel'][:],
+        }
+
+def load_mc_rtt_train():
+    url = 'https://osf.io/download/qs9ep'
+    filename = 'mc_rtt_train.h5'
+    if not os.path.exists(filename):
+        print(f"Downloading {filename}...")
+        urllib.request.urlretrieve(url, filename)
+    with h5py.File(filename, 'r') as f:
+        return {
+            'spikes': f['spikes'][:],
+            'hand_pos': f['hand_pos'][:],
+            'hand_vel': f['hand_vel'][:],
+        }
+
+def load_area2_bump_train():
+    url = 'https://osf.io/download/5bwcu'
+    filename = 'area2_bump_train.h5'
+    if not os.path.exists(filename):
+        print(f"Downloading {filename}...")
+        urllib.request.urlretrieve(url, filename)
+    with h5py.File(filename, 'r') as f:
+        return {
+            'spikes': f['spikes'][:],
+            'hand_pos': f['hand_pos'][:],
+            'hand_vel': f['hand_vel'][:],
+        }
 
 def extract_dataset_latents(loader_func, split: str, k_pca: int):
     data = loader_func(split=split)

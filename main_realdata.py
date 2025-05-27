@@ -9,7 +9,7 @@ import torch.nn as nn
 from datetime import datetime
 
 from simulations.Linear_sysmdl import SystemModel
-from simulations.utils import SplitData, extract_dataset_latents
+from simulations.utils import SplitData, extract_dataset_latents, load_mc_maze_train, load_mc_rtt_train, load_area2_bump_train
 import simulations.config as config
 from simulations.linear_canonical.parameters import F, Q_structure, R_structure, Q_structure_nonid, R_structure_nonid,\
    m, m1_0
@@ -23,10 +23,6 @@ from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
 from pipelines.Pipeline_cm import Pipeline_cm
 from pipelines.Pipeline_EKF_MAML import Pipeline_EKF_MAML
 
-from neural_latents.datasets.mc_rtt import load_dataset as load_mc_rtt
-from neural_latents.datasets.area2_bump import load_dataset as load_area2_bump
-from neural_latents.datasets.mc_maze import load_mc_maze
-import sys
 
 print("Pipeline Start")
 
@@ -140,13 +136,12 @@ k = args.k_pca  #pca dimensions --> tune in args
 # pca3 = PCA(n_components=k)
 # spikes_pca3 = pca3.fit_transform(spikes3)
 
-sys.path.append("/content/neurallatents.github.io")
 # spikes_pca1, target_1 = extract_dataset(base_dir + "MC_maze/", "*train.nwb", k)
 # spikes_pca2, target_2 = extract_dataset(base_dir + "MC_RTT/", "*train.nwb", k)
 # spikes_pca3, target_3 = extract_dataset(base_dir + "Area2_BUMP/", "*train.nwb", k)
-spikes_pca1, target_1 = extract_dataset_latents(load_mc_maze, "train", k)
-spikes_pca2, target_2 = extract_dataset_latents(load_mc_rtt, "train", k)
-spikes_pca3, target_3 = extract_dataset_latents(load_area2_bump, "train", k)
+spikes_pca1, target_1 = extract_dataset_latents(load_mc_maze_train, k)
+spikes_pca2, target_2 = extract_dataset_latents(load_mc_rtt_train, k)
+spikes_pca3, target_3 = extract_dataset_latents(load_area2_bump_train, k)
 
 target1 = torch.from_numpy(target_1).float().to(device)
 spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
