@@ -8,6 +8,9 @@ import numpy as np
 from pynwb import NWBHDF5IO
 import os
 import glob
+from neural_latents.datasets.mc_rtt import load_dataset as load_mc_rtt
+from neural_latents.datasets.area2_bump import load_dataset as load_area2_bump
+from neural_latents.datasets.mc_maze import load_dataset
 
 def DataGen(args, SysModel_data, fileName):
 
@@ -52,34 +55,6 @@ def DataGen(args, SysModel_data, fileName):
         torch.save([train_input, train_target, cv_input, cv_target, test_input, test_target,train_init, cv_init, test_init, train_lengthMask,cv_lengthMask,test_lengthMask], fileName)
     else:
         torch.save([train_input, train_target, cv_input, cv_target, test_input, test_target,train_init, cv_init, test_init], fileName)
-        
-def SplitData(args, spikes, target):
-    total_samples = target.shape[0]
-    # Calculate split indices
-    train_end = int(args.per_train * total_samples)
-    val_end = train_end + int(args.val_train * total_samples)
-
-    # Split target (N x m x T) = (N x 4 x 100)
-    target_train = target[:train_end] 
-    target_val = target[train_end:val_end]
-    target_test = target[val_end:]
-    
-    # Split spikes (N x n x T) = (N x 30 x 100)
-    spikes_train = spikes[:train_end] 
-    spikes_val = spikes[train_end:val_end] 
-    spikes_test = spikes[val_end:]
-    # use n = 30 (pca dimension)
-    #split into N trials of length T = 100
-    #dimension (N, n, T) N = number of trials (Ntrain... in args), n is pca dimension, T timelength of one trajectory (args.T)
-
-    # Extract init sequences (assume first time step, or change if needed)
-    train_init = target_train[:, :, 0].unsqueeze(-1)  # shape (N_train, m, 1)
-    cv_init = target_val[:, :, 0].unsqueeze(-1)       # shape (N_val, m, 1)
-    test_init = target_test[:, :, 0].unsqueeze(-1)    # shape (N_test, m, 1)
-
-    return spikes_train, target_train, train_init, \
-           spikes_val, target_val, cv_init, \
-           spikes_test, target_test, test_init
 
 def SplitData(args, spikes, target):
     print("Data Splitting:")
@@ -122,12 +97,12 @@ def SplitData(args, spikes, target):
             spikes_val, target_val, val_init,
             spikes_test, target_test, test_init)
     
-def load_nwb_file(path):
+#def load_nwb_file(path):
     io = NWBHDF5IO(path, mode='r')
     nwbfile = io.read()
     return nwbfile, io  # keep io open during access
 
-def extract_dataset(base_path, file_pattern, k_pca):
+#def extract_dataset(base_path, file_pattern, k_pca):
     files = sorted(glob.glob(os.path.join(base_path, file_pattern)))
     assert len(files) > 0, f"No NWB files matched {file_pattern} in {base_path}"
     
@@ -154,6 +129,20 @@ def extract_dataset(base_path, file_pattern, k_pca):
 
     io.close()
     return spikes_pca, target
+
+def extract_dataset_latents(loader_func, split: str, k_pca: int):
+    data = loader_func(split=split)
+
+    spikes = data['spikes']
+    hand_pos = data['hand_pos']
+    hand_vel = data['hand_vel']
+
+    pca = PCA(n_components=k_pca)
+    spikes_pca = pca.fit_transform(spikes)
+
+    target = np.concatenate([hand_pos, hand_vel], axis=-1)
+
+    return torch.tensor(spikes_pca, dtype=torch.float32), torch.tensor(target, dtype=torch.float32)
               
 def DecimateData(all_tensors, t_gen,t_mod, offset=0):
     

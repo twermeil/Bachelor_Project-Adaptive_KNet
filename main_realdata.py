@@ -1,4 +1,4 @@
-from nlb_tools.nwb_interface import NWBDataset
+#from nlb_tools.nwb_interface import NWBDataset
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -9,7 +9,7 @@ import torch.nn as nn
 from datetime import datetime
 
 from simulations.Linear_sysmdl import SystemModel
-from simulations.utils import SplitData, extract_dataset
+from simulations.utils import SplitData, extract_dataset_latents
 import simulations.config as config
 from simulations.linear_canonical.parameters import F, Q_structure, R_structure, Q_structure_nonid, R_structure_nonid,\
    m, m1_0
@@ -22,6 +22,10 @@ from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
 
 from pipelines.Pipeline_cm import Pipeline_cm
 from pipelines.Pipeline_EKF_MAML import Pipeline_EKF_MAML
+
+from neural_latents.datasets.mc_rtt import load_dataset as load_mc_rtt
+from neural_latents.datasets.area2_bump import load_dataset as load_area2_bump
+from neural_latents.datasets.mc_maze import load_dataset
 
 print("Pipeline Start")
 
@@ -92,7 +96,7 @@ args.update_step = 5
 args.maml_wd = [0.3, 0.3, 0.2, 0.1, 0.1, 0.01]
 
 ### paths ##################################################
-path_results = 'simulations/maml/results/2x2/normal/'
+path_results = 'simulations/real_data/results/'
 
 ###############################
 ### Data Loader (SplitData) ###
@@ -100,7 +104,7 @@ path_results = 'simulations/maml/results/2x2/normal/'
 
 #dataloading
 #base path to pull nwb files from drive on google colab
-base_dir = "/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/"
+#base_dir = "/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/"
 
 # dataset1 = NWBDataset(base_dir + "MC_maze/", "*train", split_heldout=False)
 # dataset1.load()
@@ -135,9 +139,12 @@ k = args.k_pca  #pca dimensions --> tune in args
 # pca3 = PCA(n_components=k)
 # spikes_pca3 = pca3.fit_transform(spikes3)
 
-spikes_pca1, target_1 = extract_dataset(base_dir + "MC_maze/", "*train.nwb", k)
-spikes_pca2, target_2 = extract_dataset(base_dir + "MC_RTT/", "*train.nwb", k)
-spikes_pca3, target_3 = extract_dataset(base_dir + "Area2_BUMP/", "*train.nwb", k)
+# spikes_pca1, target_1 = extract_dataset(base_dir + "MC_maze/", "*train.nwb", k)
+# spikes_pca2, target_2 = extract_dataset(base_dir + "MC_RTT/", "*train.nwb", k)
+# spikes_pca3, target_3 = extract_dataset(base_dir + "Area2_BUMP/", "*train.nwb", k)
+spikes_pca1, target_1 = extract_dataset_latents(load_dataset, "train", k)
+spikes_pca2, target_2 = extract_dataset_latents(load_mc_rtt, "train", k)
+spikes_pca3, target_3 = extract_dataset_latents(load_area2_bump, "train", k)
 
 target1 = torch.from_numpy(target_1).float().to(device)
 spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
@@ -212,7 +219,7 @@ KalmanNet_Pipeline = Pipeline_EKF_MAML(strTime, "KNet", "KalmanNet")
 KalmanNet_Pipeline.setModel(KalmanNet_model)
 KalmanNet_Pipeline.setTrainingParams(args)
 KalmanNet_Pipeline.NNTrain_alldatasets(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results, 
-                              cv_init_list, train_init_list, args)
+                              cv_init_list, train_init_list)
 
 #for i in range(len(SoW)):
    #print(f"Dataset {i}") 
