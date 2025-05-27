@@ -9,7 +9,7 @@ import torch.nn as nn
 from datetime import datetime
 
 from simulations.Linear_sysmdl import SystemModel
-from simulations.utils import SplitData
+from simulations.utils import SplitData, extract_dataset
 import simulations.config as config
 from simulations.linear_canonical.parameters import F, Q_structure, R_structure, Q_structure_nonid, R_structure_nonid,\
    m, m1_0
@@ -99,36 +99,45 @@ path_results = 'simulations/maml/results/2x2/normal/'
 ###############################
 
 #dataloading
-dataset1 = NWBDataset("data/MC_maze/", "*train", split_heldout=False)
-dataset1.load()
-dataset2 = NWBDataset("data/MC_RTT/", "*train", split_heldout=False)
-dataset2.load()
-dataset3 = NWBDataset("data/Area2_BUMP/", "*train", split_heldout=False)
-dataset3.load()
+#base path to pull nwb files from drive on google colab
+base_dir = "/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/"
 
-hp_mcmaze = dataset1.data['hand_pos']
-vel_mcmaze = dataset1.data['hand_vel'] 
-target_1 = np.concatenate([hp_mcmaze, vel_mcmaze], axis=1)  # shape (N, 4)
-spikes1 = dataset1.data['spikes']
+# dataset1 = NWBDataset(base_dir + "MC_maze/", "*train", split_heldout=False)
+# dataset1.load()
 
-fp_mcrtt = dataset2.data['finger_pos'][:, :2]
-vel_mcrtt = dataset2.data['finger_vel']
-target_2 = np.concatenate([fp_mcrtt, vel_mcrtt], axis=1)  # shape (N, 4)
-spikes2 = dataset2.data['spikes']
+# dataset2 = NWBDataset(base_dir + "MC_RTT/", "*train", split_heldout=False)
+# dataset2.load()
 
-hp_a2b = dataset3.data['hand_pos']
-vel_a2b = dataset3.data['hand_vel']
-target_3 = np.concatenate([hp_a2b, vel_a2b], axis=1)  # shape (N, 4)
-spikes3 = dataset3.data['spikes']
+# dataset3 = NWBDataset(base_dir + "Area2_BUMP/", "*train", split_heldout=False)
+# dataset3.load()
 
-#apply pca so all have same dimension 
+# hp_mcmaze = dataset1.data['hand_pos']
+# vel_mcmaze = dataset1.data['hand_vel'] 
+# target_1 = np.concatenate([hp_mcmaze, vel_mcmaze], axis=1)  # shape (N, 4)
+# spikes1 = dataset1.data['spikes']
+
+# fp_mcrtt = dataset2.data['finger_pos'][:, :2]
+# vel_mcrtt = dataset2.data['finger_vel']
+# target_2 = np.concatenate([fp_mcrtt, vel_mcrtt], axis=1)  # shape (N, 4)
+# spikes2 = dataset2.data['spikes']
+
+# hp_a2b = dataset3.data['hand_pos']
+# vel_a2b = dataset3.data['hand_vel']
+# target_3 = np.concatenate([hp_a2b, vel_a2b], axis=1)  # shape (N, 4)
+# spikes3 = dataset3.data['spikes']
+
+# #apply pca so all have same dimension 
 k = args.k_pca  #pca dimensions --> tune in args
-pca1 = PCA(n_components=k)
-spikes_pca1 = pca1.fit_transform(spikes1)
-pca2 = PCA(n_components=k)
-spikes_pca2 = pca2.fit_transform(spikes2)
-pca3 = PCA(n_components=k)
-spikes_pca3 = pca3.fit_transform(spikes3)
+# pca1 = PCA(n_components=k)
+# spikes_pca1 = pca1.fit_transform(spikes1)
+# pca2 = PCA(n_components=k)
+# spikes_pca2 = pca2.fit_transform(spikes2)
+# pca3 = PCA(n_components=k)
+# spikes_pca3 = pca3.fit_transform(spikes3)
+
+spikes_pca1, target_1 = extract_dataset(base_dir + "MC_maze/", "*train.nwb", k)
+spikes_pca2, target_2 = extract_dataset(base_dir + "MC_RTT/", "*train.nwb", k)
+spikes_pca3, target_3 = extract_dataset(base_dir + "Area2_BUMP/", "*train.nwb", k)
 
 target1 = torch.from_numpy(target_1).float().to(device)
 spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)

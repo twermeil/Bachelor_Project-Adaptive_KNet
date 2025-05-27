@@ -4,6 +4,10 @@ The file contains utility functions for the simulations.
 
 import torch
 from sklearn.decomposition import PCA
+import numpy as np
+from pynwb import NWBHDF5IO
+import os
+import glob
 
 def DataGen(args, SysModel_data, fileName):
 
@@ -117,6 +121,39 @@ def SplitData(args, spikes, target):
     return (spikes_train, target_train, train_init,
             spikes_val, target_val, val_init,
             spikes_test, target_test, test_init)
+    
+def load_nwb_file(path):
+    io = NWBHDF5IO(path, mode='r')
+    nwbfile = io.read()
+    return nwbfile, io  # keep io open during access
+
+def extract_dataset(base_path, file_pattern, k_pca):
+    files = sorted(glob.glob(os.path.join(base_path, file_pattern)))
+    assert len(files) > 0, f"No NWB files matched {file_pattern} in {base_path}"
+    
+    nwbfile, io = load_nwb_file(files[0])  # Use the first matching file
+    
+    # Spike data (assumes binned units in a 2D array)
+    spikes = np.array(nwbfile.processing['brain_observatory'].data_interfaces['binned_spikes'].data)
+
+    # Hand/finger position + velocity — adapt field names if needed
+    if 'hand_pos' in nwbfile.acquisition:
+        hand_pos = np.array(nwbfile.acquisition['hand_pos'].data)
+        hand_vel = np.array(nwbfile.acquisition['hand_vel'].data)
+        target = np.concatenate([hand_pos, hand_vel], axis=1)
+    elif 'finger_pos' in nwbfile.acquisition:
+        finger_pos = np.array(nwbfile.acquisition['finger_pos'].data)[:, :2]
+        finger_vel = np.array(nwbfile.acquisition['finger_vel'].data)
+        target = np.concatenate([finger_pos, finger_vel], axis=1)
+    else:
+        raise ValueError("Unknown target data type in acquisition")
+
+    # PCA on spikes
+    pca = PCA(n_components=k_pca)
+    spikes_pca = pca.fit_transform(spikes)
+
+    io.close()
+    return spikes_pca, target
               
 def DecimateData(all_tensors, t_gen,t_mod, offset=0):
     
