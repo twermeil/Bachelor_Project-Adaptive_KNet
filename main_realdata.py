@@ -25,7 +25,8 @@ from pipelines.Pipeline_EKF_MAML import Pipeline_EKF_MAML
 
 from neural_latents.datasets.mc_rtt import load_dataset as load_mc_rtt
 from neural_latents.datasets.area2_bump import load_dataset as load_area2_bump
-from neural_latents.datasets.mc_maze import load_dataset
+from neural_latents.datasets.mc_maze import load_mc_maze
+import sys
 
 print("Pipeline Start")
 
@@ -139,10 +140,11 @@ k = args.k_pca  #pca dimensions --> tune in args
 # pca3 = PCA(n_components=k)
 # spikes_pca3 = pca3.fit_transform(spikes3)
 
+sys.path.append("/content/neurallatents.github.io")
 # spikes_pca1, target_1 = extract_dataset(base_dir + "MC_maze/", "*train.nwb", k)
 # spikes_pca2, target_2 = extract_dataset(base_dir + "MC_RTT/", "*train.nwb", k)
 # spikes_pca3, target_3 = extract_dataset(base_dir + "Area2_BUMP/", "*train.nwb", k)
-spikes_pca1, target_1 = extract_dataset_latents(load_dataset, "train", k)
+spikes_pca1, target_1 = extract_dataset_latents(load_mc_maze, "train", k)
 spikes_pca2, target_2 = extract_dataset_latents(load_mc_rtt, "train", k)
 spikes_pca3, target_3 = extract_dataset_latents(load_area2_bump, "train", k)
 

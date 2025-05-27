@@ -142,7 +142,7 @@ def extract_dataset_latents(loader_func, split: str, k_pca: int):
 
     target = np.concatenate([hand_pos, hand_vel], axis=-1)
 
-    return torch.tensor(spikes_pca, dtype=torch.float32), torch.tensor(target, dtype=torch.float32)
+    return spikes_pca, target
               
 def DecimateData(all_tensors, t_gen,t_mod, offset=0):
     
