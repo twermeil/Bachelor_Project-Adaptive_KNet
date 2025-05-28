@@ -9,10 +9,7 @@ from pynwb import NWBHDF5IO
 import os
 import h5py
 import urllib.request
-
-from datasets.mc_rtt import load_dataset as load_mc_rtt
-from datasets.mc_maze import load_dataset as load_mc_maze
-from datasets.area2_bump import load_dataset as load_area2_bump
+import requests
 
 def DataGen(args, SysModel_data, fileName):
 
@@ -133,46 +130,37 @@ def SplitData(args, spikes, target):
 #     return spikes_pca, target
 
 def load_mc_maze_train():
-    url = 'https://osf.io/download/ugm47'
-    filename = 'mc_maze_train.h5'
-    if not os.path.exists(filename):
-        print(f"Downloading {filename}...")
-        urllib.request.urlretrieve(url, filename)
-    with h5py.File(filename, 'r') as f:
-        return {
-            'spikes': f['spikes'][:],
-            'hand_pos': f['hand_pos'][:],
-            'hand_vel': f['hand_vel'][:],
-        }
+    path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/MC_maze/mc_maze_train.nwb'
+    with NWBHDF5IO(path, "r") as io:
+        nwbfile = io.read()
+        spikes = nwbfile.acquisition['spikes'].data[:]
+        hand_pos = nwbfile.acquisition['hand_pos'].data[:]
+        hand_vel = nwbfile.acquisition['hand_vel'].data[:]
+        target = np.concatenate([hand_pos, hand_vel], axis=1)
+        return {'spikes': spikes, 'target': target}
 
 def load_mc_rtt_train():
-    url = 'https://osf.io/download/qs9ep'
-    filename = 'mc_rtt_train.h5'
-    if not os.path.exists(filename):
-        print(f"Downloading {filename}...")
-        urllib.request.urlretrieve(url, filename)
-    with h5py.File(filename, 'r') as f:
-        return {
-            'spikes': f['spikes'][:],
-            'hand_pos': f['hand_pos'][:],
-            'hand_vel': f['hand_vel'][:],
-        }
+    path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/MC_RTT/mc_rtt_train.nwb'
+    with NWBHDF5IO(path, "r") as io:
+        nwbfile = io.read()
+        spikes = nwbfile.acquisition['spikes'].data[:]
+        finger_pos = nwbfile.acquisition['finger_pos'].data[:, :2]  # keep only x, y
+        finger_vel = nwbfile.acquisition['finger_vel'].data[:]
+        target = np.concatenate([finger_pos, finger_vel], axis=1)
+        return {'spikes': spikes, 'target': target}
 
 def load_area2_bump_train():
-    url = 'https://osf.io/download/5bwcu'
-    filename = 'area2_bump_train.h5'
-    if not os.path.exists(filename):
-        print(f"Downloading {filename}...")
-        urllib.request.urlretrieve(url, filename)
-    with h5py.File(filename, 'r') as f:
-        return {
-            'spikes': f['spikes'][:],
-            'hand_pos': f['hand_pos'][:],
-            'hand_vel': f['hand_vel'][:],
-        }
+    path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/Area2_BUMP/area2_bump_train.nwb'
+    with NWBHDF5IO(path, "r") as io:
+        nwbfile = io.read()
+        spikes = nwbfile.acquisition['spikes'].data[:]
+        hand_pos = nwbfile.acquisition['hand_pos'].data[:]
+        hand_vel = nwbfile.acquisition['hand_vel'].data[:]
+        target = np.concatenate([hand_pos, hand_vel], axis=1)
+        return {'spikes': spikes, 'target': target}
 
-def extract_dataset_latents(loader_func, split: str, k_pca: int):
-    data = loader_func(split=split)
+def extract_dataset_latents(loader_func, k_pca):
+    data = loader_func()
 
     spikes = data['spikes']
     hand_pos = data['hand_pos']
