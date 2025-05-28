@@ -129,47 +129,67 @@ def SplitData(args, spikes, target):
 #     io.close()
 #     return spikes_pca, target
 
-def load_mc_maze_train():
-    path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/MC_maze/mc_maze_train.nwb'
+def bin_spike_times(units, duration, bin_size):
+    """Bin spike times from NWB 'units' to shape (time_bins, num_units)."""
+    spike_times_list = units['spike_times'].data[:]
+    num_units = len(spike_times_list)
+    num_bins = int(np.ceil(duration / bin_size))
+    binned_spikes = np.zeros((num_bins, num_units), dtype=np.float32)
+
+    for unit_idx, spike_times in enumerate(spike_times_list):
+        spike_times = np.array(spike_times)
+        bin_indices = (spike_times / bin_size).astype(int)
+        bin_indices = bin_indices[bin_indices < num_bins]
+        for idx in bin_indices:
+            binned_spikes[idx, unit_idx] += 1
+
+    return binned_spikes
+
+def load_mc_maze_train(bin_size):
+    path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/MC_maze/MC-maze_train.nwb'
     with NWBHDF5IO(path, "r") as io:
         nwbfile = io.read()
-        spikes = nwbfile.acquisition['spikes'].data[:]
-        hand_pos = nwbfile.acquisition['hand_pos'].data[:]
-        hand_vel = nwbfile.acquisition['hand_vel'].data[:]
+        behavior = nwbfile.processing['behavior']
+        hand_pos = behavior.data_interfaces['hand_pos'].data[:]
+        hand_vel = behavior.data_interfaces['hand_vel'].data[:]
         target = np.concatenate([hand_pos, hand_vel], axis=1)
+        duration = target.shape[0] / 100
+        spikes = bin_spike_times(nwbfile.units, duration, bin_size)
         return {'spikes': spikes, 'target': target}
 
-def load_mc_rtt_train():
-    path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/MC_RTT/mc_rtt_train.nwb'
+def load_mc_rtt_train(bin_size):
+    path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/MC_RTT/MC-RTT_train.nwb'
     with NWBHDF5IO(path, "r") as io:
         nwbfile = io.read()
-        spikes = nwbfile.acquisition['spikes'].data[:]
-        finger_pos = nwbfile.acquisition['finger_pos'].data[:, :2]  # keep only x, y
-        finger_vel = nwbfile.acquisition['finger_vel'].data[:]
+        behavior = nwbfile.processing['behavior']
+        finger_pos = behavior.data_interfaces['finger_pos'].data[:, :2]
+        finger_vel = behavior.data_interfaces['finger_vel'].data[:]
         target = np.concatenate([finger_pos, finger_vel], axis=1)
+        duration = target.shape[0] / 100
+        spikes = bin_spike_times(nwbfile.units, duration, bin_size)
         return {'spikes': spikes, 'target': target}
 
-def load_area2_bump_train():
-    path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/Area2_BUMP/area2_bump_train.nwb'
+def load_area2_bump_train(bin_size):
+    path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/Area2_BUMP/Area2-BUMP_train.nwb'
     with NWBHDF5IO(path, "r") as io:
         nwbfile = io.read()
-        spikes = nwbfile.acquisition['spikes'].data[:]
-        hand_pos = nwbfile.acquisition['hand_pos'].data[:]
-        hand_vel = nwbfile.acquisition['hand_vel'].data[:]
+        behavior = nwbfile.processing['behavior']
+        hand_pos = behavior.data_interfaces['hand_pos'].data[:]
+        hand_vel = behavior.data_interfaces['hand_vel'].data[:]
         target = np.concatenate([hand_pos, hand_vel], axis=1)
+        duration = target.shape[0] / 100
+        spikes = bin_spike_times(nwbfile.units, duration, bin_size)
         return {'spikes': spikes, 'target': target}
 
-def extract_dataset_latents(loader_func, k_pca):
-    data = loader_func()
+def extract_dataset_latents(bin_size, loader_func, k_pca):
+    data = loader_func(bin_size)
 
     spikes = data['spikes']
-    hand_pos = data['hand_pos']
-    hand_vel = data['hand_vel']
+    target = data['target']
 
+    # PCA on spikes
     pca = PCA(n_components=k_pca)
     spikes_pca = pca.fit_transform(spikes)
-
-    target = np.concatenate([hand_pos, hand_vel], axis=-1)
 
     return spikes_pca, target
               

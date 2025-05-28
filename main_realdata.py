@@ -10,8 +10,7 @@ from datetime import datetime
 from simulations.Linear_sysmdl import SystemModel
 from simulations.utils import SplitData, extract_dataset_latents, load_mc_maze_train, load_mc_rtt_train, load_area2_bump_train
 import simulations.config as config
-from simulations.linear_canonical.parameters import F, Q_structure, R_structure, Q_structure_nonid, R_structure_nonid,\
-   m, m1_0
+from simulations.linear_canonical.parameters import F, Q_structure, R_structure, m, m1_0, bin_size
 
 from filters.KalmanFilter_test import KFTest
 
@@ -138,9 +137,9 @@ k = args.k_pca  #pca dimensions --> tune in args
 # spikes_pca1, target_1 = extract_dataset(base_dir + "MC_maze/", "*train.nwb", k)
 # spikes_pca2, target_2 = extract_dataset(base_dir + "MC_RTT/", "*train.nwb", k)
 # spikes_pca3, target_3 = extract_dataset(base_dir + "Area2_BUMP/", "*train.nwb", k)
-spikes_pca1, target_1 = extract_dataset_latents(load_mc_maze_train, k)
-spikes_pca2, target_2 = extract_dataset_latents(load_mc_rtt_train, k)
-spikes_pca3, target_3 = extract_dataset_latents(load_area2_bump_train, k)
+spikes_pca1, target_1 = extract_dataset_latents(bin_size, load_mc_maze_train, k)
+spikes_pca2, target_2 = extract_dataset_latents(bin_size, load_mc_rtt_train, k)
+spikes_pca3, target_3 = extract_dataset_latents(bin_size, load_area2_bump_train, k)
 
 target1 = torch.from_numpy(target_1).float().to(device)
 spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
