@@ -10,7 +10,7 @@ from datetime import datetime
 from simulations.Linear_sysmdl import SystemModel
 from simulations.utils import SplitData, extract_dataset_latents, load_mc_maze_train, load_mc_rtt_train, load_area2_bump_train
 import simulations.config as config
-from simulations.linear_canonical.parameters import F, Q_structure, R_structure, m, m1_0, bin_size
+from simulations.real_data.parameters import F_CV, bin_size
 
 from filters.KalmanFilter_test import KFTest
 
@@ -19,7 +19,7 @@ from hnets.hnet_deconv import hnet_deconv
 from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
 
 from pipelines.Pipeline_cm import Pipeline_cm
-from pipelines.Pipeline_EKF_MAML import Pipeline_EKF_MAML
+from pipelines.Pipeline_EKF import Pipeline_EKF
 
 
 print("Pipeline Start")
@@ -163,14 +163,17 @@ train_init_list = []
 cv_init_list = []
 test_init_list = []
 
+## artificial SoW (not used for kalmannet)
+SoW = torch.tensor([0.0, 1.0, 2.0])
+
 for i in range(len(input_list)):
    train_input, train_target, train_init, cv_input, cv_target, cv_init, test_input, test_target, test_init = SplitData(args, input_list[i], target_list[i])
-   train_input_list.append(train_input) #input = y
-   train_target_list.append(train_target) #target = x
-   cv_input_list.append(cv_input)
-   cv_target_list.append(cv_target)
-   test_input_list.append(test_input)
-   test_target_list.append(test_target)
+   train_input_list.append([train_input, SoW[i]])
+   train_target_list.append([train_target, SoW[i]])
+   cv_input_list.append([cv_input, SoW[i]])
+   cv_target_list.append([cv_target, SoW[i]])
+   test_input_list.append([test_input, SoW[i]])
+   test_target_list.append([test_target, SoW[i]])
    train_init_list.append(train_init)
    cv_init_list.append(cv_init)
    test_init_list.append(test_init) # = x0
@@ -178,7 +181,7 @@ for i in range(len(input_list)):
 #############
 ### Model ###
 #############
-F = F.to(device)
+F = F_CV.to(device)
 n = spikespca1.shape[1]
 m = target1.shape[1]
 m1_0 = torch.zeros(m, 1)
@@ -191,34 +194,40 @@ target_all = torch.cat([target1, target2, target3], dim=0)
 spikes_all = torch.cat([spikespca1, spikespca2, spikespca3], dim=0)
 Y = target_all  # (N, 4)
 X = spikes_all  # (N, 30)
-H_est = torch.linalg.lstsq(X, Y).solution.T  # Shape (4, 30)
+H_est = (torch.linalg.pinv(X) @ Y).T
+#H_est = torch.linalg.lstsq(X, Y).solution.T  # Shape (4, 30)
 H_est = H_est.to(device)
 
 ## Q and R structure
 Q_structure = torch.eye(m)
-R_stucture = torch.eye(n)
+R_structure = torch.eye(n)
 
 ## artficial q2 and r2 for sysmodel with real data
 q2 = 1
 r2 = 1
-sys_model = []
-sys_model = SystemModel(F, q2*Q_structure, H_est, r2*R_structure, args.T, args.T_test, q2, r2)
-sys_model.InitSequence(m1_0, m2_0)
-SoW_train_range = list(range(len(input_list)))
 
-## Train Neural Network
+SoW_train_range = list(range(len(SoW)))
+
+## model
+sys_model = []
+for i in range(len(SoW)):
+   sys_model_i = SystemModel(F, q2*Q_structure, H_est, r2*R_structure, args.T, args.T_test, q2, r2)
+   sys_model_i.InitSequence(m1_0, m2_0)
+   sys_model.append(sys_model_i)
+
+print(f"KalmanNet pipeline start")
 KalmanNet_model = KNet_mnet()
 KalmanNet_model.NNBuild(sys_model[0], args)
-KalmanNet_Pipeline = Pipeline_EKF_MAML(strTime, "KNet", "KalmanNet")
-#KalmanNet_Pipeline.setssModel(sys_model[i]) #don't use it in MAML_train
+## Train Neural Network
+KalmanNet_Pipeline = Pipeline_EKF(strTime, "KNet", "KalmanNet")
+KalmanNet_Pipeline.setssModel(sys_model[0])
 KalmanNet_Pipeline.setModel(KalmanNet_model)
 KalmanNet_Pipeline.setTrainingParams(args)
-KalmanNet_Pipeline.NNTrain_alldatasets(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results, 
+KalmanNet_Pipeline.NNTrain_mixdatasets(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results, 
                               cv_init_list, train_init_list)
-
 #for i in range(len(SoW)):
    #print(f"Dataset {i}") 
-   #KalmanNet_Pipeline.NNTest_alldatasets(sys_model, test_input_list[i][0], test_target_list[i][0], path_results)
+   #KalmanNet_Pipeline.NNTest(sys_model[0], test_input_list[i][0], test_target_list[i][0], path_results)
 
 ## Close wandb run
 if args.wandb_switch: 

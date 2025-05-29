@@ -75,7 +75,7 @@ def SplitData(args, spikes, target):
 
     # Calculate split indices over N trials
     N_train = int(args.per_train * N)
-    N_val = int(args.val_train * N)
+    N_val = int(args.per_cv * N)
     N_test = N - N_train - N_val
 
     # Split
