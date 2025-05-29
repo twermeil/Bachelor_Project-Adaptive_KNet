@@ -7,10 +7,7 @@ from sklearn.decomposition import PCA
 from simulations.real_data.nwb_interface import NWBDataset
 import numpy as np
 from pynwb import NWBHDF5IO
-import os
-import h5py
-import urllib.request
-import requests
+import pandas as pd
 
 def DataGen(args, SysModel_data, fileName):
 
@@ -96,103 +93,6 @@ def SplitData(args, spikes, target):
     return (spikes_train, target_train, train_init,
             spikes_val, target_val, val_init,
             spikes_test, target_test, test_init)
-    
-# def load_nwb_file(path):
-#     io = NWBHDF5IO(path, mode='r')
-#     nwbfile = io.read()
-#     return nwbfile, io  # keep io open during access
-
-# def extract_dataset(base_path, file_pattern, k_pca):
-#     files = sorted(glob.glob(os.path.join(base_path, file_pattern)))
-#     assert len(files) > 0, f"No NWB files matched {file_pattern} in {base_path}"
-    
-#     nwbfile, io = load_nwb_file(files[0])  # Use the first matching file
-    
-#     # Spike data (assumes binned units in a 2D array)
-#     spikes = np.array(nwbfile.processing['brain_observatory'].data_interfaces['binned_spikes'].data)
-
-#     # Hand/finger position + velocity — adapt field names if needed
-#     if 'hand_pos' in nwbfile.acquisition:
-#         hand_pos = np.array(nwbfile.acquisition['hand_pos'].data)
-#         hand_vel = np.array(nwbfile.acquisition['hand_vel'].data)
-#         target = np.concatenate([hand_pos, hand_vel], axis=1)
-#     elif 'finger_pos' in nwbfile.acquisition:
-#         finger_pos = np.array(nwbfile.acquisition['finger_pos'].data)[:, :2]
-#         finger_vel = np.array(nwbfile.acquisition['finger_vel'].data)
-#         target = np.concatenate([finger_pos, finger_vel], axis=1)
-#     else:
-#         raise ValueError("Unknown target data type in acquisition")
-
-#     # PCA on spikes
-#     pca = PCA(n_components=k_pca)
-#     spikes_pca = pca.fit_transform(spikes)
-
-#     io.close()
-#     return spikes_pca, target
-
-# def bin_spike_times(units, duration, bin_size):
-#     """Bin spike times from NWB 'units' to shape (time_bins, num_units)."""
-#     spike_times_list = units['spike_times'].data[:]
-#     num_units = len(spike_times_list)
-#     num_bins = int(np.ceil(duration / bin_size))
-#     binned_spikes = np.zeros((num_bins, num_units), dtype=np.float32)
-
-#     for unit_idx, spike_times in enumerate(spike_times_list):
-#         spike_times = np.array(spike_times)
-#         bin_indices = (spike_times / bin_size).astype(int)
-#         bin_indices = bin_indices[bin_indices < num_bins]
-#         for idx in bin_indices:
-#             binned_spikes[idx, unit_idx] += 1
-
-#     return binned_spikes
-
-# def load_mc_maze_train(bin_size):
-#     path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/MC_maze/MC-maze_train.nwb'
-#     with NWBHDF5IO(path, "r") as io:
-#         nwbfile = io.read()
-#         behavior = nwbfile.processing['behavior']
-#         hand_pos = behavior.data_interfaces['hand_pos'].data[:]
-#         hand_vel = behavior.data_interfaces['hand_vel'].data[:]
-#         target = np.concatenate([hand_pos, hand_vel], axis=1)
-#         duration = target.shape[0] / 100
-#         spikes = bin_spike_times(nwbfile.units, duration, bin_size)
-#         return {'spikes': spikes, 'target': target}
-
-# def load_mc_rtt_train(bin_size):
-#     path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/MC_RTT/MC-RTT_train.nwb'
-#     with NWBHDF5IO(path, "r") as io:
-#         nwbfile = io.read()
-#         behavior = nwbfile.processing['behavior']
-#         finger_pos = behavior.data_interfaces['finger_pos'].data[:, :2]
-#         finger_vel = behavior.data_interfaces['finger_vel'].data[:]
-#         target = np.concatenate([finger_pos, finger_vel], axis=1)
-#         duration = target.shape[0] / 100
-#         spikes = bin_spike_times(nwbfile.units, duration, bin_size)
-#         return {'spikes': spikes, 'target': target}
-
-# def load_area2_bump_train(bin_size):
-#     path = '/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/Area2_BUMP/Area2-BUMP_train.nwb'
-#     with NWBHDF5IO(path, "r") as io:
-#         nwbfile = io.read()
-#         behavior = nwbfile.processing['behavior']
-#         hand_pos = behavior.data_interfaces['hand_pos'].data[:]
-#         hand_vel = behavior.data_interfaces['hand_vel'].data[:]
-#         target = np.concatenate([hand_pos, hand_vel], axis=1)
-#         duration = target.shape[0] / 100
-#         spikes = bin_spike_times(nwbfile.units, duration, bin_size)
-#         return {'spikes': spikes, 'target': target}
-
-# def extract_dataset_latents(bin_size, loader_func, k_pca):
-#     data = loader_func(bin_size)
-
-#     spikes = data['spikes']
-#     target = data['target']
-
-#     # PCA on spikes
-#     pca = PCA(n_components=k_pca)
-#     spikes_pca = pca.fit_transform(spikes)
-
-#     return spikes_pca, target
 
 def load_mc_maze_train():
     return NWBDataset("/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/MC_maze/", "MC-maze_train", split_heldout=False)
@@ -203,73 +103,81 @@ def load_mc_rtt_train():
 def load_area2_bump_train():
     return NWBDataset("/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/Area2_BUMP/", "Area2-BUMP_train", split_heldout=False)
 
-def extract_dataset_latents_nlb(args, bin_size_sec, dataset_loader):
+def extract_dataset_latents_manual(args, dataset_loader, max_trials=50):
     """
-    Preprocess an NWB dataset using the NLB pipeline and return PCA-reduced spikes and behavior targets.
-    
+    Manually preprocess dataset similar to make_trial_data, with:
+    - 1-sample binning
+    - 80ms lag (8 bins at 100Hz)
+    - PCA on smoothed spikes
+
     Parameters:
-    - bin_size_sec: float, bin size in seconds (e.g., 1/100)
+    - args: argparse-style object with args.k_pca and others
     - dataset_loader: function returning an NWBDataset instance
-    - T: int, number of time steps per trial
-    - pca_dim: int, number of PCA components to keep
-    - gauss_width: int, smoothing width in ms
+    - max_trials: int, number of trials to process (for speed/memory control)
 
     Returns:
     - spikes_pca: np.ndarray of shape (total_time, pca_dim)
-    - target: np.ndarray of shape (total_time, target_dim)
+    - target_all: np.ndarray of shape (total_time, 4)
     """
+    bin_size_ms = 10  # 100Hz
+    lag_ms = 80
+
+    # Load and smooth
     dataset = dataset_loader()
-
-    # Convert bin size from sec to ms
-    bin_size_ms = int(round(bin_size_sec * 1000))  # e.g. 10
-    align_duration_ms = bin_size_ms * args.T            # e.g. 1000 ms
-
-    # Compute align_range centered around move onset
-    align_range = (-align_duration_ms // 2, align_duration_ms // 2)
-
-    # Resample and smooth
-    dataset.resample(target_bin=bin_size_ms)
     dataset.smooth_spk(args.gauss_width, name=f"smth_{args.gauss_width}")
 
-    # Create aligned spike and target data
-    trial_data = dataset.make_trial_data(
-        align_field="move_onset_time",
-        align_range=align_range,
-        margin=0,
-        allow_nans=False
-    )
+    # Limit number of trials
+    dataset.trial_info = dataset.trial_info.iloc[:max_trials]
+    trial_info = dataset.trial_info
 
-    # Use the same window for velocity (can tweak if needed later)
-    lagged_data = dataset.make_trial_data(
-        align_field="move_onset_time",
-        align_range=align_range,
-        margin=0,
-        allow_nans=False
-    )
+    spikes_list, targets_list = [], []
 
-    # Spikes (smoothed)
-    spikes = trial_data[("spikes_smth_50",)].to_numpy()
+    for _, trial in trial_info.iterrows():
+        align_time = trial["move_onset_time"]
 
-    # Position + velocity (handle different datasets)
-    try:
-        pos = lagged_data[("hand_pos",)].to_numpy()
-        vel = lagged_data[("hand_vel",)].to_numpy()
-    except KeyError:
-        pos = lagged_data[("finger_pos",)].to_numpy()
-        vel = lagged_data[("finger_vel",)].to_numpy()
+        # Define trial window: 80 ms before to 400 ms after onset
+        start_time = align_time - pd.to_timedelta(lag_ms, unit="ms")
+        end_time = align_time + pd.to_timedelta(400, unit="ms")
 
-    target = np.hstack([pos, vel])  # final shape: (T_total, 4)
+        # Slice the continuous data
+        trial_slice = dataset.data.loc[start_time:end_time]
+        if len(trial_slice) == 0:
+            continue
 
-    # Filter valid rows (drop where NaN in either spikes or target)
-    valid = ~np.isnan(spikes).any(axis=1) & ~np.isnan(target).any(axis=1)
-    spikes = spikes[valid]
-    target = target[valid]
+        spikes = trial_slice[("spikes_smth_50",)].to_numpy()
 
-    # Apply PCA to spikes
+        try:
+            pos = trial_slice[("hand_pos",)].to_numpy()
+            vel = trial_slice[("hand_vel",)].to_numpy()
+        except KeyError:
+            pos = trial_slice[("finger_pos",)].to_numpy()
+            vel = trial_slice[("finger_vel",)].to_numpy()
+
+        target = np.hstack([pos, vel])
+
+        # Drop invalid (NaN) rows
+        valid = ~np.isnan(spikes).any(axis=1) & ~np.isnan(target).any(axis=1)
+        spikes, target = spikes[valid], target[valid]
+
+        if spikes.shape[0] == 0:
+            print("Row is NaN")
+            continue
+
+        spikes_list.append(spikes)
+        targets_list.append(target)
+
+    if not spikes_list:
+        raise ValueError("No valid trials found after filtering.")
+
+    spikes_all = np.vstack(spikes_list)
+    target_all = np.vstack(targets_list)
+
+    # PCA
     pca = PCA(n_components=args.k_pca)
-    spikes_pca = pca.fit_transform(spikes)
+    spikes_pca = pca.fit_transform(spikes_all)
 
-    return spikes_pca, target
+    return spikes_pca, target_all
+
               
 def DecimateData(all_tensors, t_gen,t_mod, offset=0):
     
