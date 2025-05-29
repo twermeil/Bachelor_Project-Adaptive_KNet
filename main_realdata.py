@@ -8,7 +8,7 @@ import torch.nn as nn
 from datetime import datetime
 
 from simulations.Linear_sysmdl import SystemModel
-from simulations.utils import SplitData, extract_dataset_latents, load_mc_maze_train, load_mc_rtt_train, load_area2_bump_train
+from simulations.utils import SplitData, extract_dataset_latents_nlb, load_mc_maze_train, load_mc_rtt_train, load_area2_bump_train
 import simulations.config as config
 from simulations.real_data.parameters import F_CV, bin_size
 
@@ -55,11 +55,11 @@ else:
 args.proc_noise_distri = "normal"
 args.meas_noise_distri = "normal"
 
-args.mixed_dataset = True #to use batch size list
+args.mixed_dataset = False #to use batch size list
 
-args.N_E = 1000 #training dataset size
-args.N_CV = 100 #cross validation
-args.N_T = 200 #testing dataset size
+# args.N_E = 1000 #training dataset size
+# args.N_CV = 100 #cross validation
+# args.N_T = 200 #testing dataset size
 args.per_cv = 0.2 #cross validation percentage
 args.per_test = 0.2 #testing percentage
 args.per_train = 0.6 #training percentage
@@ -81,65 +81,21 @@ args.knet_trainable = True
 # training parameters for KNet
 args.in_mult_KNet = 40
 args.out_mult_KNet = 40
+
 args.n_steps = 50000
-#already tuned parameters
-args.n_batch = 32
-args.update_lr = 1e-3 #0.4
-args.meta_lr = 1e-3 #0.001
-args.spt_percentage = 0.3
-args.update_step = 5
-args.maml_wd = [0.3, 0.3, 0.2, 0.1, 0.1, 0.01]
+args.n_batch = 32 
+args.lr = 1e-3
+args.wd = 1e-3
+args.k_pca = 10
+args.gauss_width = 50
+
 
 ### paths ##################################################
 path_results = 'simulations/real_data/results/'
 
-###############################
-### Data Loader (SplitData) ###
-###############################
-
-#dataloading
-#base path to pull nwb files from drive on google colab
-#base_dir = "/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/"
-
-# dataset1 = NWBDataset(base_dir + "MC_maze/", "*train", split_heldout=False)
-# dataset1.load()
-
-# dataset2 = NWBDataset(base_dir + "MC_RTT/", "*train", split_heldout=False)
-# dataset2.load()
-
-# dataset3 = NWBDataset(base_dir + "Area2_BUMP/", "*train", split_heldout=False)
-# dataset3.load()
-
-# hp_mcmaze = dataset1.data['hand_pos']
-# vel_mcmaze = dataset1.data['hand_vel'] 
-# target_1 = np.concatenate([hp_mcmaze, vel_mcmaze], axis=1)  # shape (N, 4)
-# spikes1 = dataset1.data['spikes']
-
-# fp_mcrtt = dataset2.data['finger_pos'][:, :2]
-# vel_mcrtt = dataset2.data['finger_vel']
-# target_2 = np.concatenate([fp_mcrtt, vel_mcrtt], axis=1)  # shape (N, 4)
-# spikes2 = dataset2.data['spikes']
-
-# hp_a2b = dataset3.data['hand_pos']
-# vel_a2b = dataset3.data['hand_vel']
-# target_3 = np.concatenate([hp_a2b, vel_a2b], axis=1)  # shape (N, 4)
-# spikes3 = dataset3.data['spikes']
-
-# #apply pca so all have same dimension 
-k = args.k_pca  #pca dimensions --> tune in args
-# pca1 = PCA(n_components=k)
-# spikes_pca1 = pca1.fit_transform(spikes1)
-# pca2 = PCA(n_components=k)
-# spikes_pca2 = pca2.fit_transform(spikes2)
-# pca3 = PCA(n_components=k)
-# spikes_pca3 = pca3.fit_transform(spikes3)
-
-# spikes_pca1, target_1 = extract_dataset(base_dir + "MC_maze/", "*train.nwb", k)
-# spikes_pca2, target_2 = extract_dataset(base_dir + "MC_RTT/", "*train.nwb", k)
-# spikes_pca3, target_3 = extract_dataset(base_dir + "Area2_BUMP/", "*train.nwb", k)
-spikes_pca1, target_1 = extract_dataset_latents(bin_size, load_mc_maze_train, k)
-spikes_pca2, target_2 = extract_dataset_latents(bin_size, load_mc_rtt_train, k)
-spikes_pca3, target_3 = extract_dataset_latents(bin_size, load_area2_bump_train, k)
+spikes_pca1, target_1 = extract_dataset_latents_nlb(args, bin_size, load_mc_maze_train)
+spikes_pca2, target_2 = extract_dataset_latents_nlb(args, bin_size, load_mc_rtt_train)
+spikes_pca3, target_3 = extract_dataset_latents_nlb(args, bin_size, load_area2_bump_train)
 
 target1 = torch.from_numpy(target_1).float().to(device)
 spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
@@ -164,7 +120,7 @@ cv_init_list = []
 test_init_list = []
 
 ## artificial SoW (not used for kalmannet)
-SoW = torch.tensor([0.0, 1.0, 2.0])
+SoW = torch.tensor([[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]])
 
 for i in range(len(input_list)):
    train_input, train_target, train_init, cv_input, cv_target, cv_init, test_input, test_target, test_init = SplitData(args, input_list[i], target_list[i])
@@ -188,8 +144,9 @@ m1_0 = torch.zeros(m, 1)
 m1_0 = m1_0.to(device)
 # deterministic initial condition
 m2_0 = 0 * torch.eye(m)
-m1_0 = m1_0.to(device) 
+m2_0 = m2_0.to(device) 
 ## estimate H using linear regression:
+## change to only use train set (use train_input and spikes_input)
 target_all = torch.cat([target1, target2, target3], dim=0)
 spikes_all = torch.cat([spikespca1, spikespca2, spikespca3], dim=0)
 Y = target_all  # (N, 4)
@@ -215,19 +172,24 @@ for i in range(len(SoW)):
    sys_model_i.InitSequence(m1_0, m2_0)
    sys_model.append(sys_model_i)
 
-print(f"KalmanNet pipeline start")
+##########################
+### KalmanNet Pipeline ###
+##########################
+## train and test KalmanNet
+i = 0
+print(f"KalmanNet pipeline start, train on dataset {i}")
 KalmanNet_model = KNet_mnet()
-KalmanNet_model.NNBuild(sys_model[0], args)
+KalmanNet_model.NNBuild(sys_model[i], args)
+print("Number of trainable parameters for KalmanNet:",sum(p.numel() for p in KalmanNet_model.parameters() if p.requires_grad))
 ## Train Neural Network
 KalmanNet_Pipeline = Pipeline_EKF(strTime, "KNet", "KalmanNet")
-KalmanNet_Pipeline.setssModel(sys_model[0])
+KalmanNet_Pipeline.setssModel(sys_model[i])
 KalmanNet_Pipeline.setModel(KalmanNet_model)
 KalmanNet_Pipeline.setTrainingParams(args)
-KalmanNet_Pipeline.NNTrain_mixdatasets(SoW_train_range, sys_model, cv_input_list, cv_target_list, train_input_list, train_target_list, path_results, 
-                              cv_init_list, train_init_list)
-#for i in range(len(SoW)):
-   #print(f"Dataset {i}") 
-   #KalmanNet_Pipeline.NNTest(sys_model[0], test_input_list[i][0], test_target_list[i][0], path_results)
+KalmanNet_Pipeline.NNTrain(sys_model[i], cv_input_list[i][0], cv_target_list[i][0], train_input_list[i][0], train_target_list[i][0], path_results)
+for i in range(len(SoW)):
+   print(f"Dataset {i}") 
+   KalmanNet_Pipeline.NNTest(sys_model[0], test_input_list[i][0], test_target_list[i][0], path_results)
 
 ## Close wandb run
 if args.wandb_switch: 

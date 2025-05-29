@@ -12,7 +12,7 @@ from filters.KalmanFilter_test import KFTest
 
 from hnets.hnet import HyperNetwork
 from hnets.hnet_deconv import hnet_deconv
-from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
+from mnets.KNet_mnet_MAML import KalmanNetNN as KNet_mnet
 
 from pipelines.Pipeline_cm import Pipeline_cm
 from pipelines.Pipeline_EKF import Pipeline_EKF

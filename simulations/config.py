@@ -18,12 +18,14 @@ def general_settings():
                         help='input test sequence length')
     parser.add_argument('--k_pca', type=int, default=20, metavar='pca-dimension',
                         help='dimension for PCA')
-    parser.add_argument('--per_cv', type=int, default=0.15, metavar='cross-validation-percentage',
+    parser.add_argument('--per_cv', type=float, default=0.15, metavar='cross-validation-percentage',
                         help='percentage of data used for cv')
-    parser.add_argument('--per_test', type=int, default=0.15, metavar='test-percentage',
+    parser.add_argument('--per_test', type=float, default=0.15, metavar='test-percentage',
                         help='percentage of data used for testing')
-    parser.add_argument('--per_train', type=int, default=0.7, metavar='train-percentage',
+    parser.add_argument('--per_train', type=float, default=0.7, metavar='train-percentage',
                         help='percentage of data used for training')
+    parser.add_argument('--gauss_width', type=int, default=50, metavar='gauss-width',
+                        help='standard deviation used to smooth spike trains')
     
         # Random length
     parser.add_argument('--randomLength', type=bool, default=False, metavar='rl',

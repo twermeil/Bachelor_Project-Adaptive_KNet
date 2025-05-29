@@ -16,7 +16,7 @@ from hnets.hnet_deconv import hnet_deconv
 if m==2: # 2x2 system
    from mnets.KNet_mnet import KalmanNetNN as KNet_mnet
 else: # 5x5, 10x10 system
-   from mnets.KNet_mnet_allCM import KalmanNetNN as KNet_mnet
+   from mnets.KNet_mnet_MAML import KalmanNetNN as KNet_mnet
 
 from pipelines.Pipeline_cm import Pipeline_cm
 from pipelines.Pipeline_EKF import Pipeline_EKF

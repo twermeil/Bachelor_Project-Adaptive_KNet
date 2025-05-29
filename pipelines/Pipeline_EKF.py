@@ -1,3 +1,4 @@
+
 """
 This file contains the class Pipeline_EKF, 
 which is used to train and test KalmanNet.
@@ -98,7 +99,7 @@ class WeightedHuberIQRScalingLoss(nn.Module):
     
 class Pipeline_EKF:
 
-    def __init__(self, Time, folderName, modelName): #where to save best model for further loading
+    def __init__(self, Time, folderName, modelName):
         super().__init__()
         self.Time = Time
         self.folderName = folderName + '/'
@@ -150,9 +151,8 @@ class Pipeline_EKF:
         train_lengthMask=None,cv_lengthMask=None):
 
         ### Optional: start training from previous checkpoint
-        #use only if already have a good model and want to continue training
-        #model_weights = torch.load(path_results+'knet_best-model.pt', map_location=self.device)
-        #self.model.load_state_dict(model_weights)
+        model_weights = torch.load(path_results+'knet_best-model.pt', map_location=self.device) 
+        self.model.load_state_dict(model_weights)
 
         if self.args.wandb_switch: 
             import wandb
@@ -350,7 +350,7 @@ class Pipeline_EKF:
                     self.MSE_cv_dB_opt = self.MSE_cv_dB_epoch[ti]
                     self.MSE_cv_idx_opt = ti
                     # Save the model weights to a file
-                    torch.save(self.model.state_dict(), path_results + 'knet_best-model.pt') #save the best model (when cv loss is smallest)
+                    torch.save(self.model.state_dict(), path_results + 'knet_best-model.pt')
 
             ########################
             ### Training Summary ###
