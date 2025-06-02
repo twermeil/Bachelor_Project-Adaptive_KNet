@@ -197,7 +197,7 @@ def extract_mc_rtt(args, max_trials=30):
     spikes_list, targets_list = [], []
 
     for _, trial in trial_info.iterrows():
-        align_time = trial["move_onset_time"]
+        align_time = trial["start_time"]
 
         start_time = align_time - pd.to_timedelta(lag_ms, unit="ms")
         end_time = align_time + pd.to_timedelta(500, unit="ms")
@@ -212,7 +212,7 @@ def extract_mc_rtt(args, max_trials=30):
             pos = trial_slice[("hand_pos",)].to_numpy()
             vel = trial_slice[("hand_vel",)].to_numpy()
         except KeyError:
-            pos = trial_slice[("finger_pos",)].to_numpy()
+            pos = trial_slice[("finger_pos",)].to_numpy()[:, :2]
             vel = trial_slice[("finger_vel",)].to_numpy()
 
         target = np.hstack([pos, vel])
@@ -248,7 +248,7 @@ def extract_area_2b(args, max_trials=30):
     gauss_width = 40  # fixed as per dataset standard
 
     dataset = load_area2_bump_train()
-    dataset.smooth_spk(gauss_width, name=f"spikes_smth_{gauss_width}")
+    dataset.smooth_spk(gauss_width, name=f"smth_{gauss_width}")
 
     dataset.trial_info = dataset.trial_info.iloc[:max_trials]
     trial_info = dataset.trial_info
@@ -257,6 +257,8 @@ def extract_area_2b(args, max_trials=30):
 
     for _, trial in trial_info.iterrows():
         align_time = trial["bump_time"]
+        if pd.isna(align_time):
+            continue
 
         start_time = align_time - pd.to_timedelta(lag_ms, unit="ms")
         end_time = align_time + pd.to_timedelta(350, unit="ms")

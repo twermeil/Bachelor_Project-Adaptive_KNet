@@ -24,8 +24,8 @@ def general_settings():
                         help='percentage of data used for testing')
     parser.add_argument('--per_train', type=float, default=0.7, metavar='train-percentage',
                         help='percentage of data used for training')
-    parser.add_argument('--gauss_width', type=int, default=50, metavar='gauss-width',
-                        help='standard deviation used to smooth spike trains')
+    parser.add_argument('--max_trials', type=int, default=50, metavar='max-trials',
+                        help='max trials used of real data')
     
         # Random length
     parser.add_argument('--randomLength', type=bool, default=False, metavar='rl',
