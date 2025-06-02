@@ -54,12 +54,10 @@ def DataGen(args, SysModel_data, fileName):
         torch.save([train_input, train_target, cv_input, cv_target, test_input, test_target,train_init, cv_init, test_init], fileName)
 
 def SplitData(args, spikes, target):
-    print("Data Splitting:")
     T = args.T
     total_samples = target.shape[0]
     n = spikes.shape[1]
     m = target.shape[1]
-    print("n = ", n, ", m = ", m)
 
     # Drop remainder so we can reshape evenly
     usable_len = (total_samples // T) * T
@@ -298,7 +296,21 @@ def extract_area_2b(args, max_trials=30):
 
     return spikes_pca, target_all
 
-              
+def estimate_H(spikes, targets, clip_val: float = 1.0):
+    X = spikes
+    Y = targets
+    H_est = torch.linalg.pinv(X) @ Y  # shape: (n, m)
+    
+    # Clip extreme values to prevent exploding gradients
+    H_est = torch.clamp(H_est, min=-clip_val, max=clip_val)
+    
+    # Normalize H_est (optional: based on Frobenius norm)
+    norm = torch.norm(H_est, p='fro')
+    if norm > 0:
+        H_est = H_est / norm
+
+    return H_est
+
 def DecimateData(all_tensors, t_gen,t_mod, offset=0):
     
     # ratio: defines the relation between the sampling time of the true process and of the model (has to be an integer)

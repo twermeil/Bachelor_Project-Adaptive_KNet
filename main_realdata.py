@@ -9,7 +9,7 @@ from datetime import datetime
 import os
 
 from simulations.Linear_sysmdl import SystemModel
-from simulations.utils import SplitData, extract_mc_maze, extract_mc_rtt, extract_area_2b
+from simulations.utils import SplitData, extract_mc_maze, extract_mc_rtt, extract_area_2b, estimate_H
 import simulations.config as config
 from simulations.real_data.parameters import F_CV
 
@@ -66,7 +66,7 @@ args.in_mult_KNet = 1
 args.out_mult_KNet = 1
 args.n_steps = 50000
 args.n_batch = 32
-args.lr = 1e-6
+args.lr = 1e-3
 args.wd = 1e-3
 # max trial numbers for data preprocessing
 args.max_trials = 50 
@@ -143,26 +143,29 @@ r2 = 1
 sys_model = []
 
 for i in range(len(input_list)):
-    X = train_input_list[i][0]
-    Y = train_target_list[i][0]
+    Y = target_list[i]
+    X = input_list[i]
 
-    H_est = (torch.linalg.pinv(X) @ Y).to(device)
-
+    # Estimate H robustly
+    H_est = estimate_H(X, Y)
+    
     m = Y.shape[1]
     n = X.shape[1]
 
     m1_0 = torch.zeros(m, 1).to(device)
-    m2_0 = 0 * torch.eye(m).to(device)
+    m2_0 = torch.eye(m).to(device) * 0  # if needed, change this
 
     Q_structure = torch.eye(m)
     R_structure = torch.eye(n)
 
-    sys_model_i = SystemModel(F, q2 * Q_structure, H_est, r2 * R_structure, args.T, args.T_test, q2, r2)
+    sys_model_i = SystemModel(F, q2 * Q_structure, H_est.to(device), r2 * R_structure, args.T, args.T_test, q2, r2)
     sys_model_i.InitSequence(m1_0, m2_0)
     sys_model.append(sys_model_i)
 
+## Decide which dataset you want to train on
+i = 2 #change value to 0,1,2 for different datasets
+
 print("Evaluate Kalman Filter")
-i = 2  # change this to 0, 1, or 2 to select dataset
 test_input = test_input_list[i][0]
 test_target = test_target_list[i][0]
 test_init = test_init_list[i]
