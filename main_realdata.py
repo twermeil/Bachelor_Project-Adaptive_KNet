@@ -8,9 +8,9 @@ import torch.nn as nn
 from datetime import datetime
 
 from simulations.Linear_sysmdl import SystemModel
-from simulations.utils import SplitData, extract_dataset_latents_manual, load_mc_maze_train, load_mc_rtt_train, load_area2_bump_train
+from simulations.utils import SplitData, extract_mc_maze, extract_mc_rtt, extract_area_2b
 import simulations.config as config
-from simulations.real_data.parameters import F_CV, bin_size
+from simulations.real_data.parameters import F_CV
 
 from filters.KalmanFilter_test import KFTest
 
@@ -93,15 +93,15 @@ args.gauss_width = 50
 ### paths ##################################################
 path_results = 'simulations/real_data/results/'
 
-#spikes_pca1, target_1 = extract_dataset_latents_manual(args, load_mc_maze_train)
-# spikes_pca2, target_2 = extract_dataset_latents_manual(args, load_mc_rtt_train)
-# spikes_pca3, target_3 = extract_dataset_latents_manual(args, load_area2_bump_train)
+# spikes_pca1, target_1 = extract_mc_maze(args)
+spikes_pca2, target_2 = extract_mc_rtt(args)
+# spikes_pca3, target_3 = extract_area_2bump(args)
 
 # target1 = torch.from_numpy(target_1).float().to(device)
 # spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
 
-# target2 = torch.from_numpy(target_2).float().to(device)
-# spikespca2 = torch.from_numpy(spikes_pca2).float().to(device)
+target2 = torch.from_numpy(target_2).float().to(device)
+spikespca2 = torch.from_numpy(spikes_pca2).float().to(device)
 
 # target3 = torch.from_numpy(target_3).float().to(device)
 # spikespca3 = torch.from_numpy(spikes_pca3).float().to(device)
@@ -109,8 +109,8 @@ path_results = 'simulations/real_data/results/'
 # torch.save(target1, 'target1.pt')
 # torch.save(spikespca1, 'spikespca1.pt')
 
-# torch.save(target2, 'target2.pt')
-# torch.save(spikespca2, 'spikespca2.pt')
+torch.save(target2, 'target2.pt')
+torch.save(spikespca2, 'spikespca2.pt')
 
 # torch.save(target3, 'target3.pt')
 # torch.save(spikespca3, 'spikespca3.pt')

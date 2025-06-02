@@ -103,7 +103,7 @@ def load_mc_rtt_train():
 def load_area2_bump_train():
     return NWBDataset("/content/drive/MyDrive/Bachelor_Project_Adaptive-KNet/real_data/Area2_BUMP/", "Area2-BUMP_train", split_heldout=False)
 
-def extract_dataset_latents_manual(args, dataset_loader, max_trials=50):
+def extract_mc_maze(args, max_trials=30):
     """
     Manually preprocess dataset similar to make_trial_data, with:
     - 1-sample binning
@@ -119,12 +119,12 @@ def extract_dataset_latents_manual(args, dataset_loader, max_trials=50):
     - spikes_pca: np.ndarray of shape (total_time, pca_dim)
     - target_all: np.ndarray of shape (total_time, 4)
     """
-    bin_size_ms = 10  # 100Hz
     lag_ms = 80
+    gauss_width = 50
 
     # Load and smooth
-    dataset = dataset_loader()
-    dataset.smooth_spk(args.gauss_width, name=f"smth_{args.gauss_width}")
+    dataset = load_mc_maze_train()
+    dataset.smooth_spk(gauss_width, name=f"smth_{gauss_width}")
 
     # Limit number of trials
     dataset.trial_info = dataset.trial_info.iloc[:max_trials]
@@ -144,7 +144,7 @@ def extract_dataset_latents_manual(args, dataset_loader, max_trials=50):
         if len(trial_slice) == 0:
             continue
 
-        spikes = trial_slice[("spikes_smth_50",)].to_numpy()
+        spikes = trial_slice[(f"spikes_smth_{gauss_width}",)].to_numpy()
 
         try:
             pos = trial_slice[("hand_pos",)].to_numpy()
@@ -173,6 +173,124 @@ def extract_dataset_latents_manual(args, dataset_loader, max_trials=50):
     target_all = np.vstack(targets_list)
 
     # PCA
+    pca = PCA(n_components=args.k_pca)
+    spikes_pca = pca.fit_transform(spikes_all)
+
+    return spikes_pca, target_all
+
+def extract_mc_rtt(args, max_trials=30):
+    """
+    Preprocess the MC_RTT dataset with:
+    - 1-sample binning
+    - 120ms lag
+    - PCA on smoothed spikes
+    """
+    lag_ms = 120
+    gauss_width = 50
+
+    dataset = load_mc_rtt_train()
+    dataset.smooth_spk(gauss_width, name=f"smth_{gauss_width}")
+
+    dataset.trial_info = dataset.trial_info.iloc[:max_trials]
+    trial_info = dataset.trial_info
+
+    spikes_list, targets_list = [], []
+
+    for _, trial in trial_info.iterrows():
+        align_time = trial["move_onset_time"]
+
+        start_time = align_time - pd.to_timedelta(lag_ms, unit="ms")
+        end_time = align_time + pd.to_timedelta(500, unit="ms")
+
+        trial_slice = dataset.data.loc[start_time:end_time]
+        if len(trial_slice) == 0:
+            continue
+
+        spikes = trial_slice[(f"spikes_smth_{gauss_width}",)].to_numpy()
+
+        try:
+            pos = trial_slice[("hand_pos",)].to_numpy()
+            vel = trial_slice[("hand_vel",)].to_numpy()
+        except KeyError:
+            pos = trial_slice[("finger_pos",)].to_numpy()
+            vel = trial_slice[("finger_vel",)].to_numpy()
+
+        target = np.hstack([pos, vel])
+        valid = ~np.isnan(spikes).any(axis=1) & ~np.isnan(target).any(axis=1)
+        spikes, target = spikes[valid], target[valid]
+
+        if spikes.shape[0] == 0:
+            print("Row is NaN")
+            continue
+
+        spikes_list.append(spikes)
+        targets_list.append(target)
+
+    if not spikes_list:
+        raise ValueError("No valid trials found after filtering.")
+
+    spikes_all = np.vstack(spikes_list)
+    target_all = np.vstack(targets_list)
+
+    pca = PCA(n_components=args.k_pca)
+    spikes_pca = pca.fit_transform(spikes_all)
+
+    return spikes_pca, target_all
+
+def extract_area_2b(args, max_trials=30):
+    """
+    Preprocess the Area2_BUMP dataset with:
+    - 1-sample binning
+    - 40ms lag
+    - PCA on smoothed spikes (gauss_width fixed at 40ms)
+    """
+    lag_ms = 40
+    gauss_width = 40  # fixed as per dataset standard
+
+    dataset = load_area2_bump_train()
+    dataset.smooth_spk(gauss_width, name=f"spikes_smth_{gauss_width}")
+
+    dataset.trial_info = dataset.trial_info.iloc[:max_trials]
+    trial_info = dataset.trial_info
+
+    spikes_list, targets_list = [], []
+
+    for _, trial in trial_info.iterrows():
+        align_time = trial["bump_time"]
+
+        start_time = align_time - pd.to_timedelta(lag_ms, unit="ms")
+        end_time = align_time + pd.to_timedelta(350, unit="ms")
+
+        trial_slice = dataset.data.loc[start_time:end_time]
+        if len(trial_slice) == 0:
+            continue
+
+        spikes = trial_slice[(f"spikes_smth_{gauss_width}",)].to_numpy()
+
+        try:
+            pos = trial_slice[("hand_pos",)].to_numpy()
+            vel = trial_slice[("hand_vel",)].to_numpy()
+        except KeyError:
+            pos = trial_slice[("finger_pos",)].to_numpy()
+            vel = trial_slice[("finger_vel",)].to_numpy()
+
+        target = np.hstack([pos, vel])
+        valid = ~np.isnan(spikes).any(axis=1) & ~np.isnan(target).any(axis=1)
+        spikes, target = spikes[valid], target[valid]
+
+        if spikes.shape[0] == 0:
+            print("Row is NaN")
+            continue
+
+        spikes_list.append(spikes)
+        targets_list.append(target)
+
+    if not spikes_list:
+        raise ValueError("No valid trials found after filtering.")
+
+    spikes_all = np.vstack(spikes_list)
+    target_all = np.vstack(targets_list)
+
     pca = PCA(n_components=args.k_pca)
     spikes_pca = pca.fit_transform(spikes_all)
 
