@@ -56,7 +56,7 @@ args.mixed_dataset = False
 args.per_cv = 0.2
 args.per_test = 0.2
 args.per_train = 0.6
-args.k_pca = 10
+args.k_pca = 50
 args.gauss_width = 50
 args.T = 100
 args.T_test = 100
@@ -69,43 +69,47 @@ args.n_batch = 32
 args.lr = 1e-3
 args.wd = 1e-3
 # max trial numbers for data preprocessing
-args.max_trials = 50 
+args.max_trials = 200 
 
 ### paths ##################################################
 path_results = 'simulations/real_data/results/'
 path_data = f'data/real_data/{args.max_trials}_trials/'
 os.makedirs(path_data, exist_ok=True)
 
-# # --- Extract and Save ---
-# spikes_pca1, target_1 = extract_mc_maze(args, max_trials=args.max_trials)
-# spikes_pca2, target_2 = extract_mc_rtt(args, max_trials=args.max_trials)
-# spikes_pca3, target_3 = extract_area_2b(args, max_trials=args.max_trials)
+############
+### Data ###
+############
 
-# target1 = torch.from_numpy(target_1).float().to(device)
-# spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
+## --- Extract and Save ---
+spikes_pca1, target_1 = extract_mc_maze(args, max_trials=args.max_trials)
+spikes_pca2, target_2 = extract_mc_rtt(args, max_trials=args.max_trials)
+spikes_pca3, target_3 = extract_area_2b(args, max_trials=args.max_trials)
 
-# target2 = torch.from_numpy(target_2).float().to(device)
-# spikespca2 = torch.from_numpy(spikes_pca2).float().to(device)
+target1 = torch.from_numpy(target_1).float().to(device)
+spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
 
-# target3 = torch.from_numpy(target_3).float().to(device)
-# spikespca3 = torch.from_numpy(spikes_pca3).float().to(device)
+target2 = torch.from_numpy(target_2).float().to(device)
+spikespca2 = torch.from_numpy(spikes_pca2).float().to(device)
 
-# torch.save(target1, os.path.join(path_data, 'target1.pt'))
-# torch.save(spikespca1, os.path.join(path_data, 'spikespca1.pt'))
+target3 = torch.from_numpy(target_3).float().to(device)
+spikespca3 = torch.from_numpy(spikes_pca3).float().to(device)
 
-# torch.save(target2, os.path.join(path_data, 'target2.pt'))
-# torch.save(spikespca2, os.path.join(path_data, 'spikespca2.pt'))
+torch.save(target1, os.path.join(path_data, 'target1.pt'))
+torch.save(spikespca1, os.path.join(path_data, 'spikespca1.pt'))
 
-# torch.save(target3, os.path.join(path_data, 'target3.pt'))
-# torch.save(spikespca3, os.path.join(path_data, 'spikespca3.pt'))
+torch.save(target2, os.path.join(path_data, 'target2.pt'))
+torch.save(spikespca2, os.path.join(path_data, 'spikespca2.pt'))
+
+torch.save(target3, os.path.join(path_data, 'target3.pt'))
+torch.save(spikespca3, os.path.join(path_data, 'spikespca3.pt'))
 
 ## Optional: loading from saved files
-target1 = torch.load(os.path.join(path_data, 'target1.pt')).to(device)
-spikespca1 = torch.load(os.path.join(path_data, 'spikespca1.pt')).to(device)
-target2 = torch.load(os.path.join(path_data, 'target2.pt')).to(device)
-spikespca2 = torch.load(os.path.join(path_data, 'spikespca2.pt')).to(device)
-target3 = torch.load(os.path.join(path_data, 'target3.pt')).to(device)
-spikespca3 = torch.load(os.path.join(path_data, 'spikespca3.pt')).to(device)
+# target1 = torch.load(os.path.join(path_data, 'target1.pt')).to(device)
+# spikespca1 = torch.load(os.path.join(path_data, 'spikespca1.pt')).to(device)
+# target2 = torch.load(os.path.join(path_data, 'target2.pt')).to(device)
+# spikespca2 = torch.load(os.path.join(path_data, 'spikespca2.pt')).to(device)
+# target3 = torch.load(os.path.join(path_data, 'target3.pt')).to(device)
+# spikespca3 = torch.load(os.path.join(path_data, 'spikespca3.pt')).to(device)
 
 input_list = [spikespca1, spikespca2, spikespca3]
 target_list = [target1, target2, target3]
@@ -162,26 +166,33 @@ for i in range(len(input_list)):
     sys_model_i.InitSequence(m1_0, m2_0)
     sys_model.append(sys_model_i)
 
-## Decide which dataset you want to train on
-i = 2 #change value to 0,1,2 for different datasets
-
+##########
+### KF ###
+##########
 print("Evaluate Kalman Filter")
-test_input = test_input_list[i][0]
-test_target = test_target_list[i][0]
-test_init = test_init_list[i]
-args.N_T = test_input.shape[0] #automatically matches dataset size
-print(f"Dataset {i}")
-[MSE_KF_linear_arr, MSE_KF_linear_avg, MSE_KF_dB_avg, KF_out] = KFTest(args, sys_model[i], test_input, test_target)
+for i in range(len(SoW)):
+  test_input = test_input_list[i][0]
+  test_target = test_target_list[i][0]
+  test_init = test_init_list[i]
+  args.N_T = test_input.shape[0] #automatically matches dataset size
+  print(f"Dataset {i}")
+  [MSE_KF_linear_arr, MSE_KF_linear_avg, MSE_KF_dB_avg, KF_out] = KFTest(args, sys_model[i], test_input, test_target)
 
-print(f"KalmanNet pipeline start, train on dataset {i}")
+#################
+### Kalmannet ###
+#################
+## Decide which dataset you want to train on
+j = 0 #change value to 0,1,2 for different datasets
+
+print(f"KalmanNet pipeline start, train on dataset {j}")
 KalmanNet_model = KNet_mnet()
-KalmanNet_model.NNBuild(sys_model[i], args)
+KalmanNet_model.NNBuild(sys_model[j], args)
 print("Number of trainable parameters for KalmanNet:", sum(p.numel() for p in KalmanNet_model.parameters() if p.requires_grad))
 KalmanNet_Pipeline = Pipeline_EKF(strTime, "KNet", "KalmanNet")
-KalmanNet_Pipeline.setssModel(sys_model[i])
+KalmanNet_Pipeline.setssModel(sys_model[j])
 KalmanNet_Pipeline.setModel(KalmanNet_model)
 KalmanNet_Pipeline.setTrainingParams(args)
-KalmanNet_Pipeline.NNTrain(sys_model[i], cv_input_list[i][0], cv_target_list[i][0], train_input_list[i][0], train_target_list[i][0], path_results)
+KalmanNet_Pipeline.NNTrain(sys_model[j], cv_input_list[j][0], cv_target_list[j][0], train_input_list[j][0], train_target_list[j][0], path_results)
 
 for i in range(len(SoW)):
    print(f"Dataset {i}")
