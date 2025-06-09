@@ -81,35 +81,35 @@ os.makedirs(path_data, exist_ok=True)
 ############
 
 ## --- Extract and Save ---
-spikes_pca1, target_1 = extract_mc_maze(args, max_trials=args.max_trials)
-spikes_pca2, target_2 = extract_mc_rtt(args, max_trials=args.max_trials)
-spikes_pca3, target_3 = extract_area_2b(args, max_trials=args.max_trials)
+# spikes_pca1, target_1 = extract_mc_maze(args, max_trials=args.max_trials)
+# spikes_pca2, target_2 = extract_mc_rtt(args, max_trials=args.max_trials)
+# spikes_pca3, target_3 = extract_area_2b(args, max_trials=args.max_trials)
 
-target1 = torch.from_numpy(target_1).float().to(device)
-spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
+# target1 = torch.from_numpy(target_1).float().to(device)
+# spikespca1 = torch.from_numpy(spikes_pca1).float().to(device)
 
-target2 = torch.from_numpy(target_2).float().to(device)
-spikespca2 = torch.from_numpy(spikes_pca2).float().to(device)
+# target2 = torch.from_numpy(target_2).float().to(device)
+# spikespca2 = torch.from_numpy(spikes_pca2).float().to(device)
 
-target3 = torch.from_numpy(target_3).float().to(device)
-spikespca3 = torch.from_numpy(spikes_pca3).float().to(device)
+# target3 = torch.from_numpy(target_3).float().to(device)
+# spikespca3 = torch.from_numpy(spikes_pca3).float().to(device)
 
-torch.save(target1, os.path.join(path_data, 'target1.pt'))
-torch.save(spikespca1, os.path.join(path_data, 'spikespca1.pt'))
+# torch.save(target1, os.path.join(path_data, 'target1.pt'))
+# torch.save(spikespca1, os.path.join(path_data, 'spikespca1.pt'))
 
-torch.save(target2, os.path.join(path_data, 'target2.pt'))
-torch.save(spikespca2, os.path.join(path_data, 'spikespca2.pt'))
+# torch.save(target2, os.path.join(path_data, 'target2.pt'))
+# torch.save(spikespca2, os.path.join(path_data, 'spikespca2.pt'))
 
-torch.save(target3, os.path.join(path_data, 'target3.pt'))
-torch.save(spikespca3, os.path.join(path_data, 'spikespca3.pt'))
+# torch.save(target3, os.path.join(path_data, 'target3.pt'))
+# torch.save(spikespca3, os.path.join(path_data, 'spikespca3.pt'))
 
 ## Optional: loading from saved files
-# target1 = torch.load(os.path.join(path_data, 'target1.pt')).to(device)
-# spikespca1 = torch.load(os.path.join(path_data, 'spikespca1.pt')).to(device)
-# target2 = torch.load(os.path.join(path_data, 'target2.pt')).to(device)
-# spikespca2 = torch.load(os.path.join(path_data, 'spikespca2.pt')).to(device)
-# target3 = torch.load(os.path.join(path_data, 'target3.pt')).to(device)
-# spikespca3 = torch.load(os.path.join(path_data, 'spikespca3.pt')).to(device)
+target1 = torch.load(os.path.join(path_data, 'target1.pt')).to(device)
+spikespca1 = torch.load(os.path.join(path_data, 'spikespca1.pt')).to(device)
+target2 = torch.load(os.path.join(path_data, 'target2.pt')).to(device)
+spikespca2 = torch.load(os.path.join(path_data, 'spikespca2.pt')).to(device)
+target3 = torch.load(os.path.join(path_data, 'target3.pt')).to(device)
+spikespca3 = torch.load(os.path.join(path_data, 'spikespca3.pt')).to(device)
 
 input_list = [spikespca1, spikespca2, spikespca3]
 target_list = [target1, target2, target3]

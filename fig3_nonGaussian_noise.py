@@ -267,12 +267,6 @@ print("Figure Points")
 #### Figure ####
 ################
 
-## training points ##
-
-#train_pts = hknet_pipeline.MSE_test_dB_avg
-
-## test points ##
-
 SoW2 = torch.tensor([[0, -20], [-10, -30], [-20, -40], #SoW = -20
                      [10, 0], [-10, -20], [-20, -30], #SoW = -10
                      [10, 10], [0, 0], [-20, -20], #SoW = 0
